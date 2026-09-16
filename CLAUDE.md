@@ -29,7 +29,7 @@ An ambient, camera-based sign-language communication system for elderly deaf ind
 
 - **No external SMS/WhatsApp/Twilio.** Alerts are internal application events only, relayed over WebSockets through a minimal Node backend (mirror and dashboard are separate screens/devices — decided architecture, not a single-page app).
 - **No video is ever stored or transmitted.** Only extracted landmark coordinates exist past the capture step. This is a stated privacy/architecture requirement, not just a nice-to-have.
-- **Vocabulary is frozen at ~15 signs.** Do not suggest expanding it. Confirm the list before writing training code.
+- **Vocabulary is frozen at 19 signs** (corrected 2026-09-16, matches actual downloaded data): `AFRAID, AGREE, ASSISTANCE, BAD, DOCTOR, GOOD MORNING, HOME, HOW ARE YOU, HUNGRY, I NEED HELP, PAIN, PROBLEM, SICK, STAND, STOP, THIRSTY, UNDERSTAND, WARN, YOU`. Do not suggest expanding it further.
 - Grandparent-facing UI shows **only**: need-based visual cards (`MEDICINE`, `WATER`, `PAIN`, `HELP`, etc.), live mirror feed with confidence ring, and the Reassurance Drawer. Never any health/diagnostic data (that's Phase 2's rule, but keep the UI clean of it regardless).
 - Sign-to-alert latency target: under 3 seconds.
 - System must tolerate brief tracking loss / partial hand occlusion without crashing or misfiring.
@@ -37,6 +37,8 @@ An ambient, camera-based sign-language communication system for elderly deaf ind
 ---
 
 ## Camera pipeline — exact flow to implement
+
+**Updated 2026-09-16: training data is static photos (Mendeley dataset), not video clips — see "Dataset & model type change" below. The pipeline below reflects the resulting per-frame classification approach, not the original sequence-model plan.**
 
 ```
 Webcam (getUserMedia)
@@ -49,19 +51,18 @@ Normalize hand landmarks
    │  → scale by a consistent measurement (e.g. hand span)
    │  → makes recognition invariant to distance/position from camera
    │
-Sliding window buffer
-   │  → last ~30–40 frames (~1–1.5 sec of motion)
-   │  → slides forward one frame at a time
-   │
-Sign classification model (trained separately, see below)
-   │  → input: windowed landmark sequence
-   │  → output: predicted sign label + confidence score
+Per-frame classification (trained separately, see below)
+   │  → input: single frame's normalized landmark vector (no temporal window)
+   │  → output: predicted sign label + confidence score, re-run every frame
    │
 Confidence ring UI feedback (continuous, live)
    │
 Hold-to-confirm
-   │  → confidence must stay above threshold for a short sustained duration
-   │  → prevents false triggers from transitional hand movement
+   │  → the SAME predicted label must stay above threshold for a short sustained
+   │    run of consecutive frames (majority vote over e.g. last ~15 frames)
+   │  → this is now doing the job the sliding window used to do: smoothing
+   │    per-frame noise into a stable confirmation, since the model itself has
+   │    no memory of prior frames
    │
 Sign chaining
    │  → 2–3 confirmed signs within a short time window → one intent
@@ -77,6 +78,26 @@ Node server (socket.io/ws) relays event
 Dashboard app subscribes to alert channel → renders pop-up notification
 ```
 
+### Dataset & model type change (2026-09-16)
+
+The original plan (video clips from AI4Bharat INCLUDE/CISLR → LSTM/1D-CNN sequence
+classifier) has been replaced. Actual data on hand: a **Mendeley dataset of static
+photos**, one or a few still images per word, for the 19-word vocabulary above.
+
+Consequences:
+- **No trajectory data exists.** The classifier trains on a single frame's normalized
+  landmark vector (e.g. a small MLP / dense NN, or a classical model like SVM /
+  random forest on the landmark features) — not a sequence model.
+- **Known accuracy risk:** several words in the vocabulary (`GOOD MORNING`,
+  `I NEED HELP`) plausibly involve motion in real ISL, not just a static handshape.
+  A static-photo-trained classifier can only key off handshape, so these signs may
+  be harder to distinguish reliably. This is an accepted tradeoff given the
+  available data — flag it if accuracy on motion-dependent signs is poor, don't
+  silently work around it by inventing synthetic motion data.
+- Live inference is still continuous video (webcam is not static) — the model just
+  gets called fresh every frame instead of on a sliding window, and hold-to-confirm
+  (majority vote across recent frames) does the temporal stabilization instead.
+
 ### Critical implementation notes
 
 - **Keep the MediaPipe/landmark loop OUTSIDE React (or equivalent) state.** Use refs + a ring buffer for the per-frame loop; only push to actual UI state at ~5Hz. Wiring every frame directly into component state will tank frame rate.
@@ -91,12 +112,14 @@ Dashboard app subscribes to alert channel → renders pop-up notification
 
 **The model we DO train is a separate, second, much smaller model** — a sign classifier. Sequence:
 
-1. Take ISL dataset videos (AI4Bharat INCLUDE + CISLR, scoped to our 15 signs).
-2. Run each video through MediaPipe Holistic **once, offline, before/during the hackathon** — this converts videos into labeled landmark coordinate sequences. This step is a data-prep/conversion step, not model training.
-3. Train a small sequence classifier (LSTM or 1D-CNN) on those labeled coordinate sequences. Input: coordinate sequences. Output: sign label. This is the actual ML training, and it's cheap — numeric arrays, not images, trains in minutes on CPU.
-4. At runtime, live camera frames go through the same MediaPipe conversion (step 2's process, live) and feed into this trained classifier.
+1. Take ISL dataset photos (Mendeley dataset, static images, scoped to our 19 signs — see "Dataset & model type change" above).
+2. Run each photo through MediaPipe's hand landmarker **once, offline, before/during the hackathon** — this converts photos into labeled landmark coordinate vectors (one vector per image, no temporal sequence). This step is a data-prep/conversion step, not model training. (Offline extraction uses the standalone `HandLandmarker`, not `HolisticLandmarker` — Holistic gates hand detection on finding a full body pose first, which silently failed on this dataset's close-up hand photos. The live mirror app below still uses Holistic since it also wants pose data for Phase 2; that's an independent choice from the offline extraction step.)
+3. Train a small per-frame classifier (MLP/dense NN, or a classical model like SVM/random forest) on those labeled landmark vectors. Input: a single frame's landmark coordinates. Output: sign label. This is the actual ML training, and it's cheap — numeric arrays, not images, trains in minutes on CPU.
+4. At runtime, live camera frames go through the same MediaPipe conversion (step 2's process, live, one frame at a time) and feed into this trained classifier every frame; hold-to-confirm (majority vote over recent frames) provides temporal stability since the model itself has no memory.
 
-**Do not attempt to train or fine-tune MediaPipe itself.** Do not attempt sign recognition from static single-frame photos — most ISL signs are defined by trajectory over time, not a static handshape, and a single frame cannot distinguish them. The interaction must be continuous video → sliding window → sequence classification.
+**Do not attempt to train or fine-tune MediaPipe itself.**
+
+Note the original plan called for video-based sequence training and explicitly ruled out static-photo recognition, since most ISL signs are defined by trajectory over time and a single frame normally can't distinguish them. That guidance still holds as the *ideal* — but the team is working from a static-photo dataset (Mendeley) as of 2026-09-16, so this project deliberately accepts the static-handshape approach and its accuracy tradeoff on motion-dependent signs (see above) rather than blocking on video data that isn't available. If video data becomes available later, prefer switching back to the sequence-model approach.
 
 ---
 
@@ -106,8 +129,8 @@ Dashboard app subscribes to alert channel → renders pop-up notification
 |---|---|
 | Frontend | React + Vite + Tailwind |
 | Vision/tracking | MediaPipe Holistic (WASM), client-side, pretrained |
-| Sign recognition model | Small LSTM / 1D-CNN, trained offline on landmark sequences |
-| ISL datasets | AI4Bharat INCLUDE, CISLR (scoped to ~15 home/health signs) |
+| Sign recognition model | Small per-frame classifier (MLP/dense NN or classical ML), trained offline on static-photo landmark vectors |
+| ISL datasets | Mendeley dataset, static photos (scoped to 19 home/health/emergency signs) |
 | Backend | Minimal Node.js server (Express or bare `http`), `socket.io` or `ws` — relays alert events only, no DB, no persistence, no video |
 | Alert transport | WebSockets, mirror app and dashboard app are separate screens/devices |
 | Notification UI | Custom or lightweight toast/pop-up component |
@@ -169,8 +192,8 @@ Runs on the same pose landmarks MediaPipe already produces (33 points), which Ph
 ## Things to actively avoid
 
 - Don't wire any external messaging API (Twilio/WhatsApp) — this was explicitly removed from scope.
-- Don't attempt static-photo-based sign recognition — architecturally insufficient for a trajectory-based sign set.
-- Don't expand the sign vocabulary beyond the frozen list without being told to.
+- Static-photo-based recognition is now the accepted approach for this project (data constraint, see "Dataset & model type change") — but don't silently paper over its accuracy limits on motion-dependent signs; flag them instead of inventing synthetic trajectory data.
+- Don't expand the sign vocabulary beyond the frozen 19-word list without being told to.
 - Don't build Phase 2 features unless explicitly asked — flag if a request seems to require them.
 - Don't put the MediaPipe per-frame loop into reactive UI state directly.
 - Don't skip landmark normalization.

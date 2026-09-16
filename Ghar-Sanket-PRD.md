@@ -39,7 +39,7 @@ Build a single-camera system that:
 |---|---|
 | P1-1 | System captures live video via laptop webcam, processed entirely client-side. |
 | P1-2 | System tracks hand and pose landmarks in real time using MediaPipe Holistic (WASM). |
-| P1-3 | System recognizes a fixed vocabulary of ISL signs (target: 15) from a sliding window of landmark sequences. |
+| P1-3 | System recognizes a fixed vocabulary of ISL signs (19 signs, see §9) from per-frame landmark classification (see §9 for the static-photo dataset note). |
 | P1-4 | System chains 2–3 sequential signs into a single intent (e.g. `HEAD` + `PAIN` → "headache"). |
 | P1-5 | A sign/chain must be held briefly before firing, to prevent false triggers from transitional hand movement. |
 | P1-6 | On a confirmed intent, an alert is generated and sent to the family dashboard — **no external SMS/WhatsApp; delivery is internal to the app.** |
@@ -144,7 +144,7 @@ Mirror app (grandparent's screen)          Dashboard app (family's screen)
 |---|---|
 | Frontend | React + Vite + Tailwind |
 | Vision/tracking | MediaPipe Holistic (WASM), client-side |
-| Sign recognition | Small LSTM / 1D-CNN, trained offline on landmark sequences from AI4Bharat INCLUDE + CISLR |
+| Sign recognition | Small per-frame classifier (MLP/dense NN or classical ML), trained offline on landmark vectors extracted from static photos (Mendeley dataset, 19-word vocabulary). Updated 2026-09-16 — original plan was a video-sequence LSTM/1D-CNN on AI4Bharat INCLUDE + CISLR; see CLAUDE.md for the tradeoff this implies on motion-dependent signs. |
 | Wellness metrics | Geometry/arithmetic on pose landmarks — no model |
 | Trend detection | `ruptures` (changepoint detection) |
 | Backend | Minimal Node.js server (Express or bare `http`) running `socket.io`/`ws` — relays alert events only, no persistence, no video |
@@ -156,7 +156,7 @@ Mirror app (grandparent's screen)          Dashboard app (family's screen)
 
 ## 10. Data
 
-- **ISL training data:** AI4Bharat INCLUDE and CISLR, converted to landmark sequences offline before/during the build.
+- **ISL training data:** Mendeley dataset, static photos (one or a few stills per word) covering the 19-word vocabulary, converted to landmark vectors offline before/during the build. (Original plan was AI4Bharat INCLUDE + CISLR video clips; switched 2026-09-16 based on data actually available — see CLAUDE.md for the resulting model-type change and accuracy tradeoff.)
 - **Wellness validation data:** No training data needed (geometry-only). A synthetic longitudinal generator is used solely to measure detection latency against known ground truth, since no public dataset contains a single person's decline over months.
 
 ---
@@ -176,7 +176,7 @@ Mirror app (grandparent's screen)          Dashboard app (family's screen)
 | Risk | Mitigation |
 |---|---|
 | Sign recognition accuracy degrades with real users vs. dataset | Test against live team members early (by hour 6–7), not just held-out dataset splits |
-| Vocabulary creep delays the ISL model | Freeze at 15 signs before the build starts; no additions mid-build |
+| Vocabulary creep delays the ISL model | Freeze at 19 signs before the build starts; no additions mid-build |
 | Judges question the synthetic wellness data | State proactively: real data trained/validated the recognition layer; synthetic data is used only for the multi-month time axis, which no dataset anywhere contains |
 | Voice agent/signal eats time better spent elsewhere | Explicitly optional and cut-first; do not start until core scope is demo-ready |
 | Lighting/camera angle affects tracking at demo time | Test at actual demo distance and lighting in the final rehearsal block |

@@ -1,0 +1,6 @@
+data/*/*
+!data/*/.gitkeep
+features/
+models/
+__pycache__/
+*.pyc
