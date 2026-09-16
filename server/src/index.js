@@ -3,7 +3,10 @@ const { Server } = require('socket.io')
 
 // Relays alert and check-in events between mirror and dashboard. No video,
 // no persistence, no DB.
-// Alert contract: { sign, timestamp, confidence } — see CLAUDE.md.
+// Alert contract: { sign, timestamp, confidence } — see CLAUDE.md/TEAM_GUIDE.md.
+// Sign chaining happens upstream in mirror/ (see PRD architecture diagram: ISL
+// model -> sign chaining -> alert) — by the time an event reaches here it's
+// already a single finished alert, not raw per-sign events to buffer.
 // Check-in contract: { text, timestamp } — family's message back to the
 // mirror's Reassurance Drawer, mirroring the alert contract's shape.
 function isValidAlert(payload) {
