@@ -6,11 +6,3 @@ import { io } from 'socket.io-client'
 export const socket = io(import.meta.env.VITE_SERVER_URL || 'http://localhost:4000', {
   autoConnect: true,
 })
-
-export function sendAlert({ sign, confidence }) {
-  socket.emit('alert', {
-    sign,
-    timestamp: Date.now(),
-    confidence,
-  })
-}

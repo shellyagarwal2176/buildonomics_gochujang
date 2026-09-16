@@ -11,6 +11,11 @@
       rel="stylesheet"
     />
     <title>KineSense — Amma's mirror</title>
+    <!-- @mediapipe/holistic and @mediapipe/camera_utils are built for global
+         <script> usage, not ESM bundling — loading via CDN + window globals
+         avoids the CJS/ESM interop breakage these packages hit under Vite. -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   </head>
   <body>
     <div id="root"></div>

@@ -6,27 +6,34 @@ import NeedGrid from './components/NeedGrid.jsx'
 import ChainNote from './components/ChainNote.jsx'
 import ReassuranceDrawer from './components/ReassuranceDrawer.jsx'
 import ConsentModal from './components/ConsentModal.jsx'
+import WordConfirmedFlash from './components/WordConfirmedFlash.jsx'
+import SentenceDraft from './components/SentenceDraft.jsx'
 import { useSignRecognition } from './hooks/useSignRecognition.js'
-import { sendAlert } from './lib/socket.js'
-
-const CAMERA_STATES = ['good', 'low', 'out']
 
 function App() {
   const [activeNeedId, setActiveNeedId] = useState(null)
   const [lastEvent, setLastEvent] = useState(null)
   const [wellnessOn, setWellnessOn] = useState(true)
   const [consentOpen, setConsentOpen] = useState(false)
-  const [cameraStateIndex, setCameraStateIndex] = useState(0)
+  const [confirmedWord, setConfirmedWord] = useState(null)
 
-  const handleIntentConfirmed = useCallback((step) => {
-    setActiveNeedId(step.intent)
-    setLastEvent(step)
-    sendAlert({ sign: step.label, confidence: 1 })
+  // alert dispatch already happened inside the hook (chaining -> dispatchAlert) by
+  // the time this fires — this callback is UI state only, don't re-dispatch here.
+  const handleIntentConfirmed = useCallback((alert) => {
+    setActiveNeedId(alert.sign.toLowerCase())
+    setLastEvent({ label: alert.sign })
     setTimeout(() => setActiveNeedId(null), 2200)
   }, [])
 
-  const { confidence, holdingSign } = useSignRecognition({
+  // Fires per single sign, well before the sentence-level alert above —
+  // immediate "yes, that landed" feedback while she keeps signing.
+  const handleWordConfirmed = useCallback((word) => {
+    setConfirmedWord(word.sign)
+  }, [])
+
+  const { videoRef, inFrame, confidence, holdingSign, draftWords, sendSentence } = useSignRecognition({
     onIntentConfirmed: handleIntentConfirmed,
+    onWordConfirmed: handleWordConfirmed,
   })
 
   return (
@@ -36,10 +43,7 @@ function App() {
 
         <div className="grid grid-cols-1 md:grid-cols-[340px_1fr] gap-6 mt-7">
           <div className="bg-white rounded-[28px] shadow-[0_10px_28px_rgba(92,30,46,0.12)] p-5 flex flex-col gap-4">
-            <CameraFeed
-              status={CAMERA_STATES[cameraStateIndex]}
-              onCycleStatus={() => setCameraStateIndex((i) => (i + 1) % CAMERA_STATES.length)}
-            />
+            <CameraFeed videoRef={videoRef} status={inFrame ? 'good' : 'out'} />
             <ConfidenceRing confidence={confidence} holdingSign={holdingSign} />
           </div>
 
@@ -57,6 +61,9 @@ function App() {
         onYes={() => { setWellnessOn(true); setConsentOpen(false) }}
         onNo={() => { setWellnessOn(false); setConsentOpen(false) }}
       />
+
+      <WordConfirmedFlash word={confirmedWord} onDone={() => setConfirmedWord(null)} />
+      <SentenceDraft words={draftWords} onDone={sendSentence} />
     </div>
   )
 }

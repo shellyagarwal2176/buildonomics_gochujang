@@ -19,15 +19,6 @@ export function IconFood(props) {
   )
 }
 
-export function IconMedicine(props) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...props}>
-      <rect x="4" y="9" width="16" height="6" rx="3" transform="rotate(-28 12 12)" />
-      <line x1="10.5" y1="8" x2="13.5" y2="16" transform="rotate(-28 12 12)" />
-    </svg>
-  )
-}
-
 export function IconPain(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" {...props}>
@@ -53,47 +44,123 @@ export function IconCall(props) {
   )
 }
 
-export function IconToilet(props) {
+export function IconAfraid(props) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...props}>
-      <rect x="7" y="3" width="9" height="6" rx="1.5" />
-      <path d="M6 16a6 3 0 0 0 12 0v-3H6Z" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="9" cy="10.5" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="10.5" r="1.1" fill="currentColor" stroke="none" />
+      <path d="M8.5 16c1.2-1.3 5.8-1.3 7 0" />
     </svg>
   )
 }
 
-export function IconCold(props) {
+export function IconAgree(props) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" {...props}>
-      <line x1="12" y1="4" x2="12" y2="20" />
-      <line x1="5" y1="7.5" x2="19" y2="16.5" />
-      <line x1="19" y1="7.5" x2="5" y2="16.5" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M7 21V10M2 10h4v11H2zM7 10l3-7c1.5 0 2.5 1.2 2 2.5L11 10h7a2 2 0 0 1 1.9 2.6l-2 6A2 2 0 0 1 16 20H7" />
     </svg>
   )
 }
 
-export function IconHot(props) {
+export function IconBad(props) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" {...props}>
-      <circle cx="12" cy="12" r="4.2" />
-      <line x1="12" y1="2" x2="12" y2="5" />
-      <line x1="12" y1="19" x2="12" y2="22" />
-      <line x1="2" y1="12" x2="5" y2="12" />
-      <line x1="19" y1="12" x2="22" y2="12" />
-      <line x1="4.9" y1="4.9" x2="7" y2="7" />
-      <line x1="17" y1="17" x2="19.1" y2="19.1" />
-      <line x1="4.9" y1="19.1" x2="7" y2="17" />
-      <line x1="17" y1="7" x2="19.1" y2="4.9" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M17 3v11M22 14h-4V3h4zM17 14l-3 7c-1.5 0-2.5-1.2-2-2.5L13 14H6a2 2 0 0 1-1.9-2.6l2-6A2 2 0 0 1 8 4h9" />
     </svg>
   )
 }
 
-export function IconTired(props) {
+export function IconDoctor(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" {...props}>
-      <path d="M4 12q4 3 7 0" />
-      <path d="M13 12q4 3 7 0" />
-      <text x="16.5" y="7" fontSize="6" stroke="none" fill="currentColor">z</text>
+      <path d="M8 3v4a4 4 0 0 0 8 0V3" />
+      <path d="M8 5H6a2 2 0 0 0-2 2v3a8 8 0 0 0 16 0V7a2 2 0 0 0-2-2h-2" />
+      <circle cx="19" cy="16" r="2.5" />
+      <path d="M19 15v2M18 16h2" />
+    </svg>
+  )
+}
+
+export function IconHome(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M4 11.5 12 4l8 7.5" />
+      <path d="M6 10v9h12v-9" />
+    </svg>
+  )
+}
+
+export function IconHowAreYou(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.5a2.5 2.5 0 0 1 5 0c0 1.6-2.5 2-2.5 4" />
+      <circle cx="12" cy="17" r="0.3" fill="currentColor" />
+    </svg>
+  )
+}
+
+export function IconProblem(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" {...props}>
+      <path d="M12 3 2 20h20L12 3Z" />
+      <path d="M12 10v4" />
+      <circle cx="12" cy="17" r="0.3" fill="currentColor" />
+    </svg>
+  )
+}
+
+export function IconSick(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" {...props}>
+      <path d="M10 13a4 4 0 1 0 4-4V4" />
+      <circle cx="10" cy="17" r="3" />
+    </svg>
+  )
+}
+
+export function IconStand(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" {...props}>
+      <circle cx="12" cy="4.5" r="1.8" fill="currentColor" stroke="none" />
+      <path d="M12 8v8M9 11h6M9 21l3-5 3 5" />
+    </svg>
+  )
+}
+
+export function IconStop(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" {...props}>
+      <path d="M7.5 3h9L21 7.5v9L16.5 21h-9L3 16.5v-9Z" />
+      <path d="M8 8l8 8M16 8l-8 8" />
+    </svg>
+  )
+}
+
+export function IconUnderstand(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M4 12.5 9 17l11-11" />
+    </svg>
+  )
+}
+
+export function IconWarn(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 3 2 20h20L12 3Z" />
+      <path d="M12 9.5v4" />
+      <circle cx="12" cy="16.5" r="0.3" fill="currentColor" />
+    </svg>
+  )
+}
+
+export function IconYou(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" {...props}>
+      <circle cx="12" cy="7" r="3.2" />
+      <path d="M5.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6" />
     </svg>
   )
 }

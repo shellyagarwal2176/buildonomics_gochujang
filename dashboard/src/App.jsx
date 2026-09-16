@@ -5,13 +5,17 @@ import WhosWatching from './components/WhosWatching.jsx'
 import Timeline from './components/Timeline.jsx'
 import Composer from './components/Composer.jsx'
 import FallAlertModal from './components/FallAlertModal.jsx'
+import AlertToast from './components/AlertToast.jsx'
 import { useAlertFeed } from './hooks/useAlertFeed.js'
 
 function App() {
   const [screen, setScreen] = useState('landing')
   const [checkins, setCheckins] = useState([])
   const [fallOpen, setFallOpen] = useState(false)
-  const { events, connected } = useAlertFeed()
+  const [toastAlert, setToastAlert] = useState(null)
+
+  const handleNewAlert = useCallback((event) => setToastAlert(event), [])
+  const { events, connected } = useAlertFeed({ onNewAlert: handleNewAlert })
 
   const handleSendCheckin = useCallback((text) => {
     setCheckins((prev) => [
@@ -54,6 +58,7 @@ function App() {
       </div>
 
       <FallAlertModal open={fallOpen} onClose={() => setFallOpen(false)} />
+      <AlertToast alert={toastAlert} onDismiss={() => setToastAlert(null)} />
     </div>
   )
 }

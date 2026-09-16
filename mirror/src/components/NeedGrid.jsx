@@ -1,19 +1,31 @@
 import {
-  IconWater, IconFood, IconMedicine, IconPain, IconHelp,
-  IconCall, IconToilet, IconCold, IconHot, IconTired,
+  IconAfraid, IconAgree, IconHelp, IconBad, IconDoctor, IconHome,
+  IconHowAreYou, IconFood, IconCall, IconPain, IconProblem, IconSick,
+  IconStand, IconStop, IconWater, IconUnderstand, IconWarn, IconYou,
 } from './icons.jsx'
 
+// One card per sign in the frozen 19-word vocabulary (ml/src/labels.py) —
+// ids are lowercase to match App.jsx's activeNeedId (alert.sign.toLowerCase()).
 const NEEDS = [
-  { id: 'water', label: 'Water', Icon: IconWater },
-  { id: 'food', label: 'Food', Icon: IconFood },
-  { id: 'medicine', label: 'Medicine', Icon: IconMedicine },
+  { id: 'afraid', label: 'Afraid', Icon: IconAfraid },
+  { id: 'agree', label: 'Agree', Icon: IconAgree },
+  { id: 'assistance', label: 'Assistance', Icon: IconHelp },
+  { id: 'bad', label: 'Bad', Icon: IconBad },
+  { id: 'doctor', label: 'Doctor', Icon: IconDoctor },
+  { id: 'good morning', label: 'Good morning', Icon: IconHowAreYou },
+  { id: 'home', label: 'Home', Icon: IconHome },
+  { id: 'how are you', label: 'How are you', Icon: IconHowAreYou },
+  { id: 'hungry', label: 'Hungry', Icon: IconFood },
+  { id: 'i need help', label: 'I need help', Icon: IconCall },
   { id: 'pain', label: 'Pain', Icon: IconPain },
-  { id: 'help', label: 'Help', Icon: IconHelp },
-  { id: 'call', label: 'Call me', Icon: IconCall },
-  { id: 'toilet', label: 'Toilet', Icon: IconToilet },
-  { id: 'cold', label: 'Cold', Icon: IconCold },
-  { id: 'hot', label: 'Hot', Icon: IconHot },
-  { id: 'tired', label: 'Tired', Icon: IconTired },
+  { id: 'problem', label: 'Problem', Icon: IconProblem },
+  { id: 'sick', label: 'Sick', Icon: IconSick },
+  { id: 'stand', label: 'Stand', Icon: IconStand },
+  { id: 'stop', label: 'Stop', Icon: IconStop },
+  { id: 'thirsty', label: 'Thirsty', Icon: IconWater },
+  { id: 'understand', label: 'Understand', Icon: IconUnderstand },
+  { id: 'warn', label: 'Warn', Icon: IconWarn },
+  { id: 'you', label: 'You', Icon: IconYou },
 ]
 
 export default function NeedGrid({ activeNeedId }) {
