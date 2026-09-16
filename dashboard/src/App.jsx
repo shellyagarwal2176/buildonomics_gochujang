@@ -51,8 +51,14 @@ function App() {
       <div className="absolute -top-28 -right-28 w-80 h-80 bg-rose/20 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute top-1/2 -left-28 w-72 h-72 bg-sage/20 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-64 h-64 bg-peach-deep/30 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-0 left-1/3 w-56 h-56 bg-amber/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-24 right-1/3 w-60 h-60 bg-rose/15 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute top-8 left-10 w-36 h-36 rounded-full border-2 border-rose/25 pointer-events-none" />
       <div className="absolute bottom-16 left-1/3 w-20 h-20 rounded-full border-2 border-sage/30 pointer-events-none" />
+      <div className="absolute top-1/3 right-16 w-28 h-28 rounded-full border-2 border-amber/25 pointer-events-none" />
+      <div className="absolute top-24 right-1/3 w-3 h-3 rounded-full bg-sage-deep/40 pointer-events-none" />
+      <div className="absolute bottom-10 left-16 w-2.5 h-2.5 rounded-full bg-rose-deep/40 pointer-events-none" />
+      <div className="absolute top-1/2 left-1/4 w-2 h-2 rounded-full bg-amber/50 pointer-events-none" />
 
       <div className="max-w-[1080px] mx-auto px-7 py-10 relative">
         <AmbientKolam className="absolute -top-24 left-1/2 -translate-x-1/2 w-screen h-[700px] max-w-none opacity-30 z-0 pointer-events-none" />
