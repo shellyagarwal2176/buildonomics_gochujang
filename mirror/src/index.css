@@ -1,1 +1,41 @@
 @import "tailwindcss";
+
+/*
+  Design tokens — shared with dashboard/src/index.css.
+  Keep these two files in sync by hand for now; if they drift, pull them into
+  a shared package (e.g. packages/tokens) rather than fixing one side only.
+*/
+@theme {
+  --font-serif: "Fraunces", Georgia, serif;
+  --font-dev: "Yatra One", serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+
+  --color-peach: #fcd9c5;
+  --color-peach-deep: #f5c09e;
+  --color-rose: #c9476b;
+  --color-rose-deep: #9a4a56;
+  --color-wine: #5c1e2e;
+  --color-cream: #fff8f1;
+  --color-cream-2: #fbeae0;
+  --color-cream-3: #f3dacb;
+  --color-ink: #3d2229;
+  --color-muted: #8c6b6c;
+  --color-line: #eedbcb;
+  --color-sage: #8fae8b;
+  --color-sage-deep: #4f7a57;
+  --color-amber: #d9853f;
+  --color-urgent: #b23a4e;
+}
+
+body {
+  background: var(--color-cream);
+  color: var(--color-ink);
+}
+
+@keyframes dot-glow {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(79, 122, 87, 0.18); }
+  50% { box-shadow: 0 0 0 7px rgba(79, 122, 87, 0.1); }
+}
+.animate-dot-glow {
+  animation: dot-glow 2.4s ease-in-out infinite;
+}
