@@ -1,69 +1,91 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Greeting from './components/Greeting.jsx'
 import CameraFeed from './components/CameraFeed.jsx'
 import ConfidenceRing from './components/ConfidenceRing.jsx'
-import NeedGrid from './components/NeedGrid.jsx'
+import DetectedWords from './components/DetectedWords.jsx'
+import SignHint from './components/SignHint.jsx'
 import ChainNote from './components/ChainNote.jsx'
 import ReassuranceDrawer from './components/ReassuranceDrawer.jsx'
 import ConsentModal from './components/ConsentModal.jsx'
 import WordConfirmedFlash from './components/WordConfirmedFlash.jsx'
-import SentenceDraft from './components/SentenceDraft.jsx'
+import MessageSentToast from './components/MessageSentToast.jsx'
+import AmbientKolam from './components/AmbientKolam.jsx'
 import { useSignRecognition } from './hooks/useSignRecognition.js'
+import { socket } from './lib/socket.js'
 
 function App() {
-  const [activeNeedId, setActiveNeedId] = useState(null)
   const [lastEvent, setLastEvent] = useState(null)
-  const [wellnessOn, setWellnessOn] = useState(true)
   const [consentOpen, setConsentOpen] = useState(false)
   const [confirmedWord, setConfirmedWord] = useState(null)
+  const [lastCheckin, setLastCheckin] = useState(null)
+  const [sentEvent, setSentEvent] = useState(null)
+
+  // Family's check-in messages, sent from the dashboard's Composer over the
+  // 'checkin' socket event (see server/src/index.js's relay).
+  useEffect(() => {
+    function handleCheckin(payload) {
+      setLastCheckin(payload)
+    }
+    socket.on('checkin', handleCheckin)
+    return () => socket.off('checkin', handleCheckin)
+  }, [])
 
   // alert dispatch already happened inside the hook (chaining -> dispatchAlert) by
   // the time this fires — this callback is UI state only, don't re-dispatch here.
   const handleIntentConfirmed = useCallback((alert) => {
-    setActiveNeedId(alert.sign.toLowerCase())
     setLastEvent({ label: alert.sign })
-    setTimeout(() => setActiveNeedId(null), 2200)
+    setSentEvent({ label: alert.sign })
   }, [])
 
   // Fires per single sign, well before the sentence-level alert above —
-  // immediate "yes, that landed" feedback while she keeps signing.
+  // immediate "yes, that landed" feedback while they keep signing.
   const handleWordConfirmed = useCallback((word) => {
     setConfirmedWord(word.sign)
   }, [])
 
-  const { videoRef, inFrame, confidence, holdingSign, draftWords, sendSentence } = useSignRecognition({
+  const {
+    videoRef, inFrame, confidence, holdingSign, draftWords, sendSentence, removeLastWord,
+  } = useSignRecognition({
     onIntentConfirmed: handleIntentConfirmed,
     onWordConfirmed: handleWordConfirmed,
   })
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-peach to-cream pb-32">
-      <div className="max-w-[1080px] mx-auto px-7 pt-9">
-        <Greeting wellnessOn={wellnessOn} onToggleWellness={() => setWellnessOn((v) => !v)} />
+    <div className="min-h-screen bg-gradient-to-b from-peach to-cream pb-32 relative overflow-hidden">
+      <div className="absolute -top-24 -left-24 w-72 h-72 bg-rose/25 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/3 -right-28 w-80 h-80 bg-sage/25 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-peach-deep/40 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-10 right-8 w-40 h-40 rounded-full border-2 border-rose/25 pointer-events-none" />
+      <div className="absolute bottom-24 right-10 w-24 h-24 rounded-full border-2 border-sage/30 pointer-events-none" />
 
-        <div className="grid grid-cols-1 md:grid-cols-[340px_1fr] gap-6 mt-7">
-          <div className="bg-white rounded-[28px] shadow-[0_10px_28px_rgba(92,30,46,0.12)] p-5 flex flex-col gap-4">
+      <div className="max-w-[680px] mx-auto px-7 pt-6 relative">
+        <AmbientKolam className="absolute -top-16 left-1/2 -translate-x-1/2 w-screen h-[600px] max-w-none opacity-40 z-0 pointer-events-none" />
+
+        <div className="relative z-10">
+          <Greeting />
+
+          <div className="bg-white rounded-[28px] shadow-[0_10px_28px_rgba(92,30,46,0.12)] p-5 flex flex-col gap-4 mt-5">
             <CameraFeed videoRef={videoRef} status={inFrame ? 'good' : 'out'} />
             <ConfidenceRing confidence={confidence} holdingSign={holdingSign} />
+            <DetectedWords words={draftWords} onBackspace={removeLastWord} onDone={sendSentence} />
           </div>
 
-          <div>
-            <NeedGrid activeNeedId={activeNeedId} />
-            <ChainNote lastEvent={lastEvent} onOpenConsent={() => setConsentOpen(true)} />
-          </div>
+          <SignHint />
+
+          <ChainNote lastEvent={lastEvent} onOpenConsent={() => setConsentOpen(true)} />
         </div>
       </div>
 
-      <ReassuranceDrawer lastSentLabel={lastEvent?.label} />
+      <ReassuranceDrawer lastSentLabel={lastEvent?.label} lastCheckin={lastCheckin} />
 
       <ConsentModal
         open={consentOpen}
-        onYes={() => { setWellnessOn(true); setConsentOpen(false) }}
-        onNo={() => { setWellnessOn(false); setConsentOpen(false) }}
+        onYes={() => setConsentOpen(false)}
+        onNo={() => setConsentOpen(false)}
       />
 
       <WordConfirmedFlash word={confirmedWord} onDone={() => setConfirmedWord(null)} />
-      <SentenceDraft words={draftWords} onDone={sendSentence} />
+      <MessageSentToast event={sentEvent} onDone={() => setSentEvent(null)} />
     </div>
   )
 }

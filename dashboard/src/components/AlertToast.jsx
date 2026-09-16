@@ -29,7 +29,7 @@ export default function AlertToast({ alert, onDismiss }) {
       <div className={`rounded-2xl shadow-[0_10px_28px_rgba(92,30,46,0.25)] p-4 ${SEVERITY_STYLE[alert.severity] ?? SEVERITY_STYLE.normal}`}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold opacity-80">Amma just signed</p>
+            <p className="text-xs font-semibold opacity-80">Your loved one just signed</p>
             <p className="font-serif text-lg mt-0.5">"{alert.sign}"</p>
             <p className="text-xs opacity-75 mt-1">{formatTime(alert.timestamp)}</p>
           </div>

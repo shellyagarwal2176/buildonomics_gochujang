@@ -146,6 +146,7 @@ export function useSignRecognition({ onIntentConfirmed, onWordConfirmed } = {}) 
   }, [])
 
   const sendSentence = () => chainRef.current?.flush()
+  const removeLastWord = () => chainRef.current?.removeLast()
 
-  return { videoRef, inFrame, confidence, holdingSign, draftWords, sendSentence }
+  return { videoRef, inFrame, confidence, holdingSign, draftWords, sendSentence, removeLastWord }
 }

@@ -11,6 +11,11 @@
       rel="stylesheet"
     />
     <title>KineSense — Family dashboard</title>
+    <!-- Landing's wave-to-enter uses MediaPipe Holistic — loaded via CDN
+         script tags, not npm, since its package breaks under Vite's
+         ESM/CJS interop (see mirror/index.html for the full explanation). -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   </head>
   <body>
     <div id="root"></div>
