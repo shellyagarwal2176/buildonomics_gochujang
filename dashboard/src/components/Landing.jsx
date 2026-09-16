@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
+import { useWaveDetector } from '../hooks/useWaveDetector.js'
 
 const HAND = `<path d="M120 18 C130 34 148 104 157 156 C163 190 152 220 147 240 C151 262 156 282 160 300 L120 300 Z" fill="#E6A383"/>
 <path d="M141 90 C150 120 156 140 157 156 C163 190 152 220 147 240 C151 262 156 282 160 300 L150 300 C146 280 141 260 139 242 C144 220 150 192 146 162 C145 140 143 116 141 90 Z" fill="#D08665"/>
@@ -16,6 +17,9 @@ const HAND = `<path d="M120 18 C130 34 148 104 157 156 C163 190 152 220 147 240 
 // two renderers or two animation loops running at once.
 export default function Landing({ onChooseFamily, onChooseElder }) {
   const stageRef = useRef(null)
+  const { videoRef: waveVideoRef, handVisible } = useWaveDetector({
+    onWave: () => stageRef.current?.__choose('R'),
+  })
 
   useEffect(() => {
     const stage = stageRef.current
@@ -34,7 +38,7 @@ export default function Landing({ onChooseFamily, onChooseElder }) {
 
     const scene = new THREE.Scene()
     const cam = new THREE.PerspectiveCamera(40, stage.clientWidth / H, 0.1, 100)
-    cam.position.set(0, 0, 7.5)
+    cam.position.set(0, 0, 5.5)
     cam.lookAt(0, 0.1, 0)
     scene.add(new THREE.AmbientLight(0xffe4dc, 0.85))
     const dl = new THREE.DirectionalLight(0xffffff, 0.85)
@@ -44,7 +48,7 @@ export default function Landing({ onChooseFamily, onChooseElder }) {
     const grp = new THREE.Group()
     grp.position.y = 0.3
     scene.add(grp)
-    const s = 0.18
+    const s = 0.3
     const pts = []
     for (let i = 0; i < 600; i++) {
       const t = (i / 600) * 6 * Math.PI
@@ -125,7 +129,7 @@ export default function Landing({ onChooseFamily, onChooseElder }) {
       chosen = sd === 'L' ? 0 : 1
       $(chosen ? 'L' : 'R').style.opacity = 0.25
       $(sd).style.opacity = 1
-      $('msg').textContent = chosen ? 'Welcome home, Amma' : 'Opening the family view'
+      $('msg').textContent = chosen ? 'Welcome home' : 'Opening the family view'
       $('msg').style.opacity = 1
       setTimeout(() => {
         if (chosen === 1) onChooseElder?.()
@@ -277,7 +281,9 @@ export default function Landing({ onChooseFamily, onChooseElder }) {
             className="absolute top-6 inset-x-0 text-center z-[2] pointer-events-none transition-[opacity,transform] duration-[1.2s]"
             style={{ opacity: 0, transform: 'translateY(-8px)' }}
           >
-            <div className="font-serif text-[52px] leading-none font-medium">KineSense</div>
+            <div className="font-serif text-[64px] leading-none font-semibold animate-glow-pulse" style={{ color: '#8E2E42' }}>
+              KineSense
+            </div>
             <div className="font-serif italic text-xl mt-2" style={{ color: '#9A4A56' }}>
               a sign, and a signal
             </div>
@@ -289,34 +295,42 @@ export default function Landing({ onChooseFamily, onChooseElder }) {
           >
             <div
               id="L"
-              className="side absolute left-0 w-1/2 top-[372px] text-center z-[2] pointer-events-none px-5 transition-opacity duration-[0.9s]"
+              className="side absolute left-0 w-1/2 top-[350px] text-center z-[2] pointer-events-none px-5 transition-opacity duration-[0.9s]"
             >
-              <div className="font-dev text-lg" style={{ color: '#C9476B' }}>मैं परिवार हूँ</div>
-              <div className="font-serif text-[28px] leading-tight">I look after her</div>
               <div
-                className="font-serif italic text-[15px] mt-3 inline-flex items-center gap-1.5 pb-0.5"
-                style={{ color: '#9A4A56', borderBottom: '1.5px solid #C9476B' }}
+                className="inline-block bg-white/80 border-2 rounded-[22px] px-7 py-5 shadow-[0_10px_28px_rgba(92,30,46,0.14)]"
+                style={{ borderColor: '#C9476B' }}
               >
-                tap to open the family view <span aria-hidden="true">→</span>
+                <div className="font-serif text-[28px] leading-tight">I look after them</div>
+                <div
+                  className="font-serif italic text-[15px] mt-3 inline-flex items-center gap-1.5 pb-0.5"
+                  style={{ color: '#9A4A56', borderBottom: '1.5px solid #C9476B' }}
+                >
+                  tap here to open the family view <span aria-hidden="true">→</span>
+                </div>
               </div>
             </div>
             <div
               id="R"
-              className="side absolute right-0 w-1/2 top-[372px] text-center z-[2] pointer-events-none px-5 transition-opacity duration-[0.9s]"
+              className="side absolute right-0 w-1/2 top-[350px] text-center z-[2] pointer-events-none px-5 transition-opacity duration-[0.9s]"
             >
-              <div className="font-dev text-lg" style={{ color: '#C9476B' }}>मैं यहाँ रहती हूँ</div>
-              <div className="font-serif text-[28px] leading-tight">I live here</div>
-              <div className="inline-flex items-center gap-2.5 mt-2">
-                <div className="relative w-[34px] h-[34px]">
-                  <span
-                    className="ring absolute inset-0 rounded-full"
-                    style={{ border: '1.5px solid #C9476B' }}
-                  />
-                  <span className="absolute inset-0 flex items-center justify-center text-base">🖐</span>
+              <div
+                className="inline-block bg-white/80 border-2 rounded-[22px] px-7 py-5 shadow-[0_10px_28px_rgba(92,30,46,0.14)]"
+                style={{ borderColor: '#C9476B' }}
+              >
+                <div className="font-serif text-[28px] leading-tight">I live here</div>
+                <div className="inline-flex items-center gap-2.5 mt-2">
+                  <div className="relative w-[34px] h-[34px]">
+                    <span
+                      className={`ring absolute inset-0 rounded-full ${handVisible ? 'animate-wave-glow' : ''}`}
+                      style={{ border: '1.5px solid #C9476B' }}
+                    />
+                    <span className="absolute inset-0 flex items-center justify-center text-base">🖐</span>
+                  </div>
+                  <span className="font-serif italic text-[15px]" style={{ color: '#9A4A56' }}>
+                    {handVisible ? 'hold still — opening…' : 'raise and hold your hand to enter'}
+                  </span>
                 </div>
-                <span className="font-serif italic text-[15px]" style={{ color: '#9A4A56' }}>
-                  raise your hand to the mirror
-                </span>
               </div>
             </div>
           </div>
@@ -328,7 +342,7 @@ export default function Landing({ onChooseFamily, onChooseElder }) {
           <div
             className="absolute inset-y-0 left-0 w-1/2 cursor-pointer z-[4]"
             onClick={() => stageRef.current?.__choose('L')}
-            aria-label="I look after her"
+            aria-label="I look after them"
           />
           <div
             className="absolute inset-y-0 right-0 w-1/2 cursor-pointer z-[4]"
@@ -337,21 +351,7 @@ export default function Landing({ onChooseFamily, onChooseElder }) {
           />
         </div>
 
-        <div className="flex gap-2 flex-wrap mt-4">
-          <button
-            onClick={() => stageRef.current?.__choose('L')}
-            className="bg-white border rounded-full px-4 py-2.5 text-[13px] font-semibold"
-            style={{ borderColor: '#E7B99B', color: '#9A4A56' }}
-          >
-            Tap as family
-          </button>
-          <button
-            onClick={() => stageRef.current?.__choose('R')}
-            className="bg-white border rounded-full px-4 py-2.5 text-[13px] font-semibold"
-            style={{ borderColor: '#E7B99B', color: '#9A4A56' }}
-          >
-            Simulate: Amma raises her hand
-          </button>
+        <div className="flex justify-center mt-4">
           <button
             onClick={() => stageRef.current?.__reset()}
             className="text-[13px] underline"
@@ -360,6 +360,10 @@ export default function Landing({ onChooseFamily, onChooseElder }) {
             Clear choice
           </button>
         </div>
+
+        {/* Hidden capture for wave-to-enter — see useWaveDetector.js. Not
+            shown to the user; only its detection result (handVisible) is. */}
+        <video ref={waveVideoRef} className="hidden" muted playsInline autoPlay />
       </div>
     </div>
   )

@@ -10,7 +10,7 @@ export default function CameraFeed({ videoRef, status = 'out' }) {
   const copy = STATUS_COPY[status] ?? STATUS_COPY.out
 
   return (
-    <div className="relative rounded-[20px] bg-[#2A1720] aspect-[4/5] overflow-hidden flex items-center justify-center">
+    <div className="relative rounded-[20px] bg-[#2A1720] aspect-[16/10] overflow-hidden flex items-center justify-center">
       <video
         ref={videoRef}
         autoPlay

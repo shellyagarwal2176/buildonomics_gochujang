@@ -3,8 +3,8 @@ import { useEffect } from 'react'
 const FLASH_MS = 1500
 
 // Immediate per-word feedback, separate from the final sentence alert — fires
-// the instant hold-to-confirm locks in a single sign, so Amma gets confirmation
-// each word landed while she keeps signing the rest of the sentence.
+// the instant hold-to-confirm locks in a single sign, so they get confirmation
+// each word landed while they keep signing the rest of the sentence.
 export default function WordConfirmedFlash({ word, onDone }) {
   useEffect(() => {
     if (!word) return

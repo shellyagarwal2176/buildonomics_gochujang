@@ -12,7 +12,7 @@ export default function Timeline({ items }) {
   if (items.length === 0) {
     return (
       <p className="text-[13px] text-muted italic">
-        Nothing yet today — this fills in as Amma signs from her mirror.
+        Nothing yet today — this fills in as your loved one signs from their mirror.
       </p>
     )
   }

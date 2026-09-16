@@ -9,10 +9,6 @@ export default function Composer({ onSend, onPreviewFall }) {
     <div className="bg-white rounded-[22px] p-5 shadow-[0_10px_28px_rgba(92,30,46,0.12)]">
       <h2 className="font-serif text-lg text-wine mb-3.5">Send a check-in</h2>
 
-      {/* NOTE: this only updates the local timeline right now. There's no
-          'checkin' event in the server contract yet (server/ only relays
-          'alert'), so nothing actually reaches Amma's mirror until that's
-          added — coordinate with Neerav before adding it, per TEAM_GUIDE. */}
       <div className="flex flex-col gap-2 mb-3.5">
         {QUICK_MESSAGES.map((msg) => (
           <button

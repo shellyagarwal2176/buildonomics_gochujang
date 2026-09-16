@@ -13,13 +13,13 @@ export default function FallAlertModal({ open, onClose }) {
         <div className="w-[70px] h-[70px] rounded-full bg-white/15 mx-auto mb-4.5 flex items-center justify-center text-3xl">
           🚨
         </div>
-        <h2 className="font-serif text-2xl">Amma may have fallen</h2>
+        <h2 className="font-serif text-2xl">Your loved one may have fallen</h2>
         <p className="text-[13.5px] text-white/85 mt-2.5">
           No movement detected after a sudden drop · {new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}
         </p>
         <div className="flex flex-col gap-2.5 mt-6">
           <button className="bg-white text-urgent rounded-2xl py-3.5 text-sm font-bold">
-            Call Amma now
+            Call them now
           </button>
           <button className="bg-white/12 border border-white/40 text-white rounded-2xl py-3.5 text-sm font-bold">
             Call neighbour Lakshmi
