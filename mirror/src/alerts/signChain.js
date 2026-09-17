@@ -13,6 +13,7 @@
 // pause mid-sentence. maxChainLength is just a runaway-input safety cap.
 
 import { INTENT_MAP, keyFor } from "./intentMap.js";
+import { composeSentence } from "./composeSentence.js";
 
 const DEFAULT_MAX_CHAIN_LENGTH = 12;
 const DEFAULT_INACTIVITY_MS = 7000;
@@ -64,9 +65,10 @@ export class SignChainBuffer {
     this.onUpdate?.([]);
 
     const signs = chain.map((c) => c.sign);
-    // Known short combos get their family-facing phrasing from intentMap;
-    // anything longer just reads left-to-right as a sentence.
-    const composedSign = INTENT_MAP[keyFor(signs)] ?? signs.join(" ").toLowerCase();
+    // Known short combos get their hand-authored family-facing phrasing from
+    // intentMap; anything else is composed into a real sentence (see
+    // composeSentence.js) instead of a raw word join.
+    const composedSign = INTENT_MAP[keyFor(signs)] ?? composeSentence(signs);
     // Weakest link: a chain is only as trustworthy as its least-confident sign.
     const confidence = Math.min(...chain.map((c) => c.confidence));
 
