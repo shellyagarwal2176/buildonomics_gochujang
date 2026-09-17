@@ -1,6 +1,15 @@
 const { createServer } = require('http')
 const { Server } = require('socket.io')
 const { upsertDailyMetric, getUndismissedDriftCards, dismissDriftCard } = require('./db')
+const {
+  createHousehold,
+  regenerateHouseholdCode,
+  pairMirror,
+  verifyDeviceToken,
+  signupFamilyMember,
+  loginFamilyMember,
+  verifyFamilyToken,
+} = require('./auth')
 
 // Relays alert and check-in events between mirror and dashboard. No video
 // ever stored — that's what CLAUDE.md's "no persistence" line protects.
@@ -12,7 +21,15 @@ const { upsertDailyMetric, getUndismissedDriftCards, dismissDriftCard } = requir
 // model -> sign chaining -> alert) — by the time an event reaches here it's
 // already a single finished alert, not raw per-sign events to buffer.
 // Check-in contract: { text, timestamp } — family's message back to the
-// mirror's Reassurance Drawer, mirroring the alert contract's shape.
+// mirror's Reassurance Drawer, mirroring the alert contract's shape. The
+// relay attaches `from` (the sender's name) server-side before broadcasting
+// — see the socket.io auth middleware below; never trust a client-supplied
+// name for attribution.
+//
+// Every socket must authenticate (see CLAUDE.md's Authentication section) as
+// either a paired mirror device or a logged-in family member, and every
+// live event (alert/checkin/fall/fallResolved) is scoped to that socket's
+// household room — a household never sees another household's events.
 function isValidAlert(payload) {
   return (
     payload &&
@@ -82,43 +99,183 @@ function isValidMetric(payload) {
   )
 }
 
-const httpServer = createServer((req, res) => {
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+function sendJson(res, status, body) {
+  res.writeHead(status, { 'Content-Type': 'application/json', ...CORS_HEADERS })
+  res.end(JSON.stringify(body))
+}
+
+// Family-JWT auth for the REST endpoints that need it (currently just
+// regenerate-code) — same token shape/verification as the socket.io
+// middleware below, just read from an Authorization header instead of
+// handshake.auth. Returns the decoded payload or null, never throws.
+function authenticateFamilyRequest(req) {
+  const header = req.headers.authorization || ''
+  const [scheme, token] = header.split(' ')
+  if (scheme !== 'Bearer' || !token) return null
+  return verifyFamilyToken(token)
+}
+
+// No framework (matches the existing plain `http` server) — just enough
+// body parsing for the small JSON payloads the /api/* auth endpoints take.
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = ''
+    req.on('data', (chunk) => {
+      data += chunk
+      if (data.length > 1e6) req.destroy(new Error('Request body too large'))
+    })
+    req.on('end', () => {
+      if (!data) return resolve({})
+      try {
+        resolve(JSON.parse(data))
+      } catch {
+        reject(new Error('Invalid JSON body'))
+      }
+    })
+    req.on('error', reject)
+  })
+}
+
+const httpServer = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, CORS_HEADERS)
+    res.end()
+    return
+  }
 
   if (req.method === 'GET' && url.pathname === '/drift-cards') {
     const residentId = url.searchParams.get('residentId')
     if (!residentId) {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: 'residentId is required' }))
+      sendJson(res, 400, { error: 'residentId is required' })
       return
     }
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(getUndismissedDriftCards(residentId)))
+    sendJson(res, 200, getUndismissedDriftCards(residentId))
     return
   }
 
   if (req.method === 'POST' && /^\/drift-cards\/\d+\/dismiss$/.test(url.pathname)) {
     const id = Number(url.pathname.split('/')[2])
     dismissDriftCard(id)
-    res.writeHead(204)
+    res.writeHead(204, CORS_HEADERS)
     res.end()
     return
   }
 
-  res.writeHead(404)
+  if (req.method === 'POST' && url.pathname === '/api/household') {
+    try {
+      const { householdId, pairingCode } = createHousehold()
+      sendJson(res, 201, { householdId, pairingCode })
+    } catch (err) {
+      sendJson(res, 500, { error: err.message })
+    }
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/mirror/pair') {
+    try {
+      const body = await readJsonBody(req)
+      const { deviceToken, householdId } = pairMirror(body.pairingCode)
+      sendJson(res, 201, { deviceToken, householdId })
+    } catch (err) {
+      sendJson(res, 400, { error: err.message })
+    }
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/family/signup') {
+    try {
+      const body = await readJsonBody(req)
+      const token = signupFamilyMember(body.pairingCode, body.name, body.password)
+      sendJson(res, 201, { token })
+    } catch (err) {
+      sendJson(res, 400, { error: err.message })
+    }
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/family/login') {
+    try {
+      const body = await readJsonBody(req)
+      const token = loginFamilyMember(body.pairingCode, body.name, body.password)
+      sendJson(res, 200, { token })
+    } catch (err) {
+      sendJson(res, 401, { error: err.message })
+    }
+    return
+  }
+
+  // Rotates the household's pairing code (see auth.js's regenerateHouseholdCode)
+  // — any logged-in family member can trigger it, proven by their JWT.
+  // Doesn't invalidate already-paired mirrors or already-issued JWTs, only
+  // future signups/logins/mirror pairings need the new code.
+  if (req.method === 'POST' && url.pathname === '/api/household/regenerate-code') {
+    const payload = authenticateFamilyRequest(req)
+    if (!payload) {
+      sendJson(res, 401, { error: 'unauthorized' })
+      return
+    }
+    try {
+      const pairingCode = regenerateHouseholdCode(payload.householdId)
+      sendJson(res, 200, { pairingCode })
+    } catch (err) {
+      sendJson(res, 400, { error: err.message })
+    }
+    return
+  }
+
+  res.writeHead(404, CORS_HEADERS)
   res.end()
 })
 const io = new Server(httpServer, {
   cors: { origin: '*' },
 })
 
+// Every socket authenticates as either a paired mirror device
+// ({ deviceToken } in handshake.auth) or a logged-in family member
+// ({ token }). Neither resolves -> reject the connection outright, per
+// CLAUDE.md's Authentication section — no anonymous sockets.
+io.use((socket, next) => {
+  const auth = socket.handshake.auth || {}
+
+  if (auth.deviceToken) {
+    const result = verifyDeviceToken(auth.deviceToken)
+    if (!result) return next(new Error('unauthorized'))
+    socket.data.householdId = result.householdId
+    socket.data.role = 'mirror'
+    socket.data.name = null
+    return next()
+  }
+
+  if (auth.token) {
+    const payload = verifyFamilyToken(auth.token)
+    if (!payload) return next(new Error('unauthorized'))
+    socket.data.householdId = payload.householdId
+    socket.data.role = 'family'
+    socket.data.name = payload.name
+    return next()
+  }
+
+  return next(new Error('unauthorized'))
+})
+
 io.on('connection', (socket) => {
+  const room = `household:${socket.data.householdId}`
+  socket.join(room)
+
   socket.on('alert', (payload) => {
     if (!isValidAlert(payload)) {
       console.error('Dropping malformed alert payload from', socket.id, payload)
       return
     }
-    socket.broadcast.emit('alert', payload)
+    io.to(room).except(socket.id).emit('alert', payload)
   })
 
   socket.on('checkin', (payload) => {
@@ -126,15 +283,20 @@ io.on('connection', (socket) => {
       console.error('Dropping malformed checkin payload from', socket.id, payload)
       return
     }
-    socket.broadcast.emit('checkin', payload)
+    io.to(room).except(socket.id).emit('checkin', { ...payload, from: socket.data.name })
   })
 
+  // fall/fallResolved carry the same cross-household privacy stakes as
+  // alert/checkin (arguably higher), so they're room-scoped the same way
+  // even though only alert/checkin were called out by name — leaving these
+  // on socket.broadcast would still leak a fall event to every connected
+  // household, which defeats the point of this auth pass.
   socket.on('fall', (payload) => {
     if (!isValidFall(payload)) {
       console.error('Dropping malformed fall payload from', socket.id, payload)
       return
     }
-    socket.broadcast.emit('fall', payload)
+    io.to(room).except(socket.id).emit('fall', payload)
   })
 
   socket.on('fallResolved', (payload) => {
@@ -142,7 +304,7 @@ io.on('connection', (socket) => {
       console.error('Dropping malformed fallResolved payload from', socket.id, payload)
       return
     }
-    socket.broadcast.emit('fallResolved', payload)
+    io.to(room).except(socket.id).emit('fallResolved', payload)
   })
 
   socket.on('metric', (payload) => {

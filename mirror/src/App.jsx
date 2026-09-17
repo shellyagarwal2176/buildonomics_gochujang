@@ -12,9 +12,11 @@ import MessageSentToast from './components/MessageSentToast.jsx'
 import AmbientKolam from './components/AmbientKolam.jsx'
 import DebugOverlay from './components/DebugOverlay.jsx'
 import FallDetectedBanner from './components/FallDetectedBanner.jsx'
+import PairingScreen from './components/PairingScreen.jsx'
 import { useSignRecognition } from './hooks/useSignRecognition.js'
 import { getConsent, setConsent } from './wellness/consent.js'
 import { dispatchFallResolved } from './wellness/dispatchFallResolved.js'
+import { ensurePaired } from './lib/pairing.js'
 import { socket } from './lib/socket.js'
 
 function App() {
@@ -25,6 +27,27 @@ function App() {
   const [lastCheckin, setLastCheckin] = useState(null)
   const [sentEvent, setSentEvent] = useState(null)
   const [fallDetected, setFallDetected] = useState(false)
+  const [pairingCode, setPairingCode] = useState(null)
+
+  // Silent device pairing/auth (CLAUDE.md's Authentication section) — runs
+  // once per device, ever. The socket only connects once this resolves.
+  useEffect(() => {
+    ensurePaired()
+      .then(({ pairingCode }) => {
+        if (pairingCode) setPairingCode(pairingCode)
+      })
+      .catch((err) => console.error('Mirror pairing failed:', err))
+  }, [])
+
+  // Never surface a raw connection error to her — socket.io keeps retrying
+  // on its own; this is just so an auth failure doesn't go unhandled.
+  useEffect(() => {
+    function handleConnectError(err) {
+      console.error('Mirror socket connect_error:', err.message)
+    }
+    socket.on('connect_error', handleConnectError)
+    return () => socket.off('connect_error', handleConnectError)
+  }, [])
 
   const handleConsent = useCallback((granted) => {
     setConsent(granted)
@@ -120,6 +143,7 @@ function App() {
           setFallDetected(false)
         }}
       />
+      <PairingScreen code={pairingCode} onContinue={() => setPairingCode(null)} />
     </div>
   )
 }

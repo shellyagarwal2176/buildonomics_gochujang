@@ -33,7 +33,7 @@ export default function Timeline({ items }) {
             </>
           ) : (
             <p className="text-[13px] text-muted italic">
-              You sent: "{item.text}" · {formatTime(item.timestamp)}
+              {item.own ? 'You' : item.from || 'Family'} sent: "{item.text}" · {formatTime(item.timestamp)}
             </p>
           )}
         </li>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Landing from './components/Landing.jsx'
+import AuthForm from './components/AuthForm.jsx'
 import GuardianTop from './components/GuardianTop.jsx'
 import WhosWatching from './components/WhosWatching.jsx'
 import Timeline from './components/Timeline.jsx'
@@ -10,6 +11,7 @@ import AmbientKolam from './components/AmbientKolam.jsx'
 import DriftCards from './components/DriftCards.jsx'
 import { useAlertFeed } from './hooks/useAlertFeed.js'
 import { useDriftCards } from './hooks/useDriftCards.js'
+import { getStoredToken, storeToken, clearStoredToken } from './lib/auth.js'
 import { socket } from './lib/socket.js'
 
 function App() {
@@ -17,6 +19,62 @@ function App() {
   const [checkins, setCheckins] = useState([])
   const [fallOpen, setFallOpen] = useState(false)
   const [toastAlert, setToastAlert] = useState(null)
+  const [authToken, setAuthToken] = useState(() => getStoredToken())
+
+  // Connect (or reconnect) once we have a family JWT to authenticate with —
+  // the socket.io server rejects any unauthenticated connection
+  // (server/src/index.js's io.use() middleware).
+  useEffect(() => {
+    if (!authToken) return
+    socket.auth = { token: authToken }
+    socket.connect()
+    return () => socket.disconnect()
+  }, [authToken])
+
+  useEffect(() => {
+    function handleConnectError(err) {
+      console.error('Dashboard socket connect_error:', err.message)
+      // Most likely an expired/invalid token — drop it and send them back to
+      // the login form rather than sitting "disconnected" indefinitely.
+      clearStoredToken()
+      setAuthToken(null)
+    }
+    socket.on('connect_error', handleConnectError)
+    return () => socket.off('connect_error', handleConnectError)
+  }, [])
+
+  const handleAuthenticated = useCallback((token) => {
+    storeToken(token)
+    setAuthToken(token)
+  }, [])
+
+  const handleLogout = useCallback(() => {
+    clearStoredToken()
+    setAuthToken(null)
+    socket.disconnect()
+  }, [])
+
+  // Other family members' check-ins in this household, relayed by the server
+  // with a `from` name it attached itself (never trust a client-supplied
+  // name for attribution) — this app's own sent messages are added locally
+  // by handleSendCheckin below instead, since the server excludes the
+  // sender from its own broadcast.
+  useEffect(() => {
+    function handleCheckin(payload) {
+      setCheckins((prev) => [
+        {
+          kind: 'checkin',
+          id: `checkin-${payload.timestamp}-${payload.from ?? 'unknown'}`,
+          text: payload.text,
+          timestamp: payload.timestamp,
+          from: payload.from,
+        },
+        ...prev,
+      ])
+    }
+    socket.on('checkin', handleCheckin)
+    return () => socket.off('checkin', handleCheckin)
+  }, [])
 
   const handleNewAlert = useCallback((event) => setToastAlert(event), [])
   const { events, connected } = useAlertFeed({ onNewAlert: handleNewAlert })
@@ -45,7 +103,7 @@ function App() {
   const handleSendCheckin = useCallback((text) => {
     const timestamp = Date.now()
     setCheckins((prev) => [
-      { kind: 'checkin', id: `checkin-${timestamp}`, text, timestamp },
+      { kind: 'checkin', id: `checkin-${timestamp}`, text, timestamp, own: true },
       ...prev,
     ])
     socket.emit('checkin', { text, timestamp })
@@ -69,6 +127,10 @@ function App() {
     )
   }
 
+  if (!authToken) {
+    return <AuthForm onAuthenticated={handleAuthenticated} />
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-peach to-cream relative overflow-hidden">
       <div className="absolute -top-28 -right-28 w-80 h-80 bg-rose/20 rounded-full blur-3xl pointer-events-none" />
@@ -87,7 +149,7 @@ function App() {
         <AmbientKolam className="absolute -top-24 left-1/2 -translate-x-1/2 w-screen h-[700px] max-w-none opacity-30 z-0 pointer-events-none" />
 
         <div className="relative z-10">
-          <GuardianTop connected={connected} />
+          <GuardianTop connected={connected} onLogout={handleLogout} />
           <WhosWatching />
 
           <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-7 mt-7">

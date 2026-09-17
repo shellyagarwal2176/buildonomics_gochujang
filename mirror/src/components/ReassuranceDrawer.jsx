@@ -9,7 +9,7 @@ function formatTime(ts) {
 
 export default function ReassuranceDrawer({ lastSentLabel, lastCheckin }) {
   const checkin = lastCheckin
-    ? { text: lastCheckin.text, from: 'Family', when: formatTime(lastCheckin.timestamp) }
+    ? { text: lastCheckin.text, from: lastCheckin.from || 'Family', when: formatTime(lastCheckin.timestamp) }
     : SEED_CHECKIN
 
   return (
