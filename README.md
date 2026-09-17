@@ -1,4 +1,4 @@
-# Ghar-Sanket (घर-संकेत)
+# Kine-Sense
 
 Ambient ISL sign-communication system for elderly individuals living alone.
 See `CLAUDE.md` for full build context and `Ghar-Sanket-PRD.md` for the product spec.
