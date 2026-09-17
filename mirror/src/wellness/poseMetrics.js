@@ -16,11 +16,13 @@ const LEFT_ANKLE = 27
 const RIGHT_ANKLE = 28
 
 const DROP_WINDOW_MS = 500 // how fast a drop must happen to count as "sudden"
-const DROP_THRESHOLD = 0.22 // normalized (0..1) hip-centroid y increase within the window
+const DROP_THRESHOLD = 0.15 // moderate hip drop is enough to start a fall candidate when the body also becomes low and spread out
 const NO_RECOVERY_MS = 1500 // how long the drop must persist to rule out a quick crouch/bend
-const RECOVERY_TOLERANCE = 0.08 // how close to pre-drop y counts as "recovered"
+const RECOVERY_TOLERANCE = 0.06 // keep the fall active until the hips actually settle back near their baseline
 const FALL_COOLDOWN_MS = 30000 // don't re-fire on the same fall
 const MIN_HIP_VISIBILITY = 0.3 // below this, MediaPipe itself doesn't trust the landmark — treat as noise, not motion (see the near-zero-visibility readings the fake-camera debug session turned up)
+const BODY_COMPRESSION_THRESHOLD = 0.06 // a small compression is enough to count as collapse when the body is also dropping low
+const BODY_WIDTH_RATIO_THRESHOLD = 0.8 // wide/low body silhouette is more compatible with lying than seated upright posture
 
 function hipVisibilityOk(landmarks) {
   const l = landmarks[LEFT_HIP], r = landmarks[RIGHT_HIP]
@@ -36,36 +38,59 @@ function hipVisibilityOk(landmarks) {
 // someone hand-tests by miming a fall in frame. Upgrade path: log (drop
 // magnitude, resolved posture) pairs during testing and adjust the constants above.
 export function createFallDetector({ onFall }) {
-  let history = [] // ring buffer of { t, hipY }
+  let history = [] // ring buffer of { t, hipY, bodyHeight, bodyWidth }
   let state = 'idle' // 'idle' | 'dropped'
   let dropBaselineY = null
+  let dropBaselineBodyHeight = null
   let dropStartedAt = null
   let lastFallFiredAt = 0
 
-  // A sudden hip-Y rise that never "recovers" is ALSO exactly what a normal
-  // sit-down at the desk looks like — this app's whole camera setup is
-  // someone sitting close to a laptop, so that's not a rare edge case, it's
-  // the common case. Firing on drop-and-stay alone would false-positive on
-  // ordinary sitting down. Resolve it by checking the CURRENTLY VISIBLE,
-  // settled posture: 'lying' confirms an actual fall, 'sitting'/'standing'
-  // means they're upright and fine (a controlled sit or recovery).
+  function estimateBodyGeometry(landmarks) {
+    const ls = landmarks[LEFT_SHOULDER], rs = landmarks[RIGHT_SHOULDER]
+    const lh = landmarks[LEFT_HIP], rh = landmarks[RIGHT_HIP]
+    const lk = landmarks[LEFT_KNEE], rk = landmarks[RIGHT_KNEE]
+    const la = landmarks[LEFT_ANKLE], ra = landmarks[RIGHT_ANKLE]
+    if (!ls || !rs || !lh || !rh || !lk || !rk || !la || !ra) return null
+
+    const shoulderY = (ls.y + rs.y) / 2
+    const hipY = (lh.y + rh.y) / 2
+    const kneeY = (lk.y + rk.y) / 2
+    const ankleY = (la.y + ra.y) / 2
+    const bodyHeight = Math.max(0.001, Math.abs(shoulderY - ankleY))
+    const bodyWidth = Math.max(
+      ls.x, rs.x, lh.x, rh.x, la.x, ra.x,
+    ) - Math.min(ls.x, rs.x, lh.x, rh.x, la.x, ra.x)
+
+    return { shoulderY, hipY, kneeY, ankleY, bodyHeight, bodyWidth }
+  }
+
+  function isLikelyCollapsed(landmarks, dropBaselineBodyHeight) {
+    const geom = estimateBodyGeometry(landmarks)
+    if (!geom) return false
+
+    const posture = classifyPosture(landmarks)
+    const bodyCollapsed = typeof dropBaselineBodyHeight === 'number'
+      ? geom.bodyHeight <= dropBaselineBodyHeight * (1 - BODY_COMPRESSION_THRESHOLD)
+      : false
+    const wideLowSilhouette = geom.bodyWidth / Math.max(geom.bodyHeight, 0.001) >= BODY_WIDTH_RATIO_THRESHOLD
+
+    return posture === 'lying' || bodyCollapsed || wideLowSilhouette
+  }
+
   function resolveDropLive(now, landmarks) {
     state = 'idle'
     if (now - lastFallFiredAt < FALL_COOLDOWN_MS) return
+
     const posture = classifyPosture(landmarks)
-    if (posture === 'sitting' || posture === 'standing') return // visibly upright and settled — not a fall
+    const collapsed = isLikelyCollapsed(landmarks, dropBaselineBodyHeight)
+    if (posture === 'sitting' || posture === 'standing') {
+      if (!collapsed) return
+    }
 
     lastFallFiredAt = now
-    onFall({ confidence: posture === 'lying' ? 0.85 : 0.7 })
+    onFall({ confidence: posture === 'lying' || collapsed ? 0.85 : 0.7 })
   }
 
-  // Landmarks lost entirely (left the frame) — deliberately NOT posture-
-  // gated: the last frame seen right before disappearing is a mid-motion
-  // snapshot, not a settled read, and could transiently still look like
-  // "standing" a split second before actually collapsing. Losing tracking
-  // right after a sudden drop is itself consistent with a real fall (a
-  // desk-camera setup makes this plausible), so err toward alerting rather
-  // than trusting an unreliable last-known frame to veto it.
   function resolveDropLost(now) {
     state = 'idle'
     if (now - lastFallFiredAt < FALL_COOLDOWN_MS) return
@@ -83,32 +108,44 @@ export function createFallDetector({ onFall }) {
       return
     }
 
-    if (!hipVisibilityOk(poseLandmarks)) return // noisy/unreliable frame — ignore rather than let it drive a transition
+    if (!hipVisibilityOk(poseLandmarks)) return
 
     const left = poseLandmarks[LEFT_HIP]
     const right = poseLandmarks[RIGHT_HIP]
     const hipY = (left.y + right.y) / 2
+    const geom = estimateBodyGeometry(poseLandmarks)
+    if (!geom) return
 
     if (state === 'idle') {
-      history.push({ t: now, hipY })
+      history.push({ t: now, hipY, bodyHeight: geom.bodyHeight, bodyWidth: geom.bodyWidth })
       while (history.length && now - history[0].t > DROP_WINDOW_MS) history.shift()
       if (history.length < 2) return
+
       const baseline = history[0].hipY
-      if (hipY - baseline >= DROP_THRESHOLD) {
+      const baselineBodyHeight = history[0].bodyHeight
+      const dropSize = hipY - baseline
+      const bodyCollapse = geom.bodyHeight <= baselineBodyHeight * (1 - BODY_COMPRESSION_THRESHOLD)
+      const wideLowSilhouette = geom.bodyWidth / Math.max(geom.bodyHeight, 0.001) >= BODY_WIDTH_RATIO_THRESHOLD
+
+      if (dropSize >= DROP_THRESHOLD && (bodyCollapse || wideLowSilhouette)) {
         state = 'dropped'
         dropBaselineY = baseline
+        dropBaselineBodyHeight = baselineBodyHeight
         dropStartedAt = now
       }
       return
     }
 
     // state === 'dropped'
-    const recovered = hipY - dropBaselineY < RECOVERY_TOLERANCE
+    const recovered = hipY - dropBaselineY < RECOVERY_TOLERANCE &&
+      geom.bodyHeight >= dropBaselineBodyHeight * 0.96
+
     if (recovered) {
       state = 'idle'
       history = []
       return
     }
+
     if (now - dropStartedAt >= NO_RECOVERY_MS) resolveDropLive(now, poseLandmarks)
   }
 

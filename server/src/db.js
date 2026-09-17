@@ -1,4 +1,4 @@
-const Database = require('better-sqlite3')
+ const Database = require('better-sqlite3')
 const path = require('path')
 
 // Phase 2 persistence. Phase 1's server was intentionally stateless ("no DB,
