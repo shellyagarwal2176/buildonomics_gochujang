@@ -1,14 +1,48 @@
- const Database = require('better-sqlite3')
+const { DatabaseSync } = require('node:sqlite')
 const path = require('path')
 
 // Phase 2 persistence. Phase 1's server was intentionally stateless ("no DB,
 // no persistence" in CLAUDE.md) — that line was protecting against storing
 // video/PII, not ruling out a rolling metric buffer, which Phase 2's 60-day
-// trend engine cannot work without. Single-file SQLite, single hardcoded
-// resident — no multi-resident/accounts support, not asked for.
-const db = new Database(path.join(__dirname, '..', 'wellness.db'))
+// trend engine cannot work without. Single-file SQLite, reused (not a second
+// DB file) for the auth tables below — households/family_members/
+// mirror_devices, added for per-household auth (see server/src/auth.js and
+// CLAUDE.md's Authentication section). daily_metrics/drift_cards still key
+// off a single hardcoded residentId, not householdId — that's an existing
+// limitation of the Phase 2 trend engine, not something this auth work fixes.
+//
+// Uses Node's built-in node:sqlite (DatabaseSync) rather than better-sqlite3
+// — same synchronous prepare/run/get/all API and @name parameter binding, so
+// every query below is unchanged, but no native module to compile. Swapped
+// in because better-sqlite3 needs a C++ toolchain (node-gyp) that isn't
+// installed on every dev machine; node:sqlite ships with Node 22+ and needs
+// nothing extra. It's still marked experimental upstream — worth watching
+// for breaking changes on a Node upgrade, but functionally solid here.
+const db = new DatabaseSync(path.join(__dirname, '..', 'wellness.db'))
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS households (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pairing_code TEXT NOT NULL UNIQUE,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS family_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    household_id INTEGER NOT NULL REFERENCES households(id),
+    name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE (household_id, name)
+  );
+
+  CREATE TABLE IF NOT EXISTS mirror_devices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    household_id INTEGER NOT NULL REFERENCES households(id),
+    device_token TEXT NOT NULL UNIQUE,
+    created_at INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS daily_metrics (
     resident_id TEXT NOT NULL,
     date TEXT NOT NULL,
@@ -36,6 +70,48 @@ db.exec(`
     dismissed INTEGER DEFAULT 0
   );
 `)
+
+function insertHousehold(pairingCode) {
+  const { lastInsertRowid } = db
+    .prepare('INSERT INTO households (pairing_code, created_at) VALUES (?, ?)')
+    .run(pairingCode, Date.now())
+  return lastInsertRowid
+}
+
+function getHouseholdByPairingCode(pairingCode) {
+  return db.prepare('SELECT * FROM households WHERE pairing_code = ?').get(pairingCode)
+}
+
+function getHouseholdById(householdId) {
+  return db.prepare('SELECT * FROM households WHERE id = ?').get(householdId)
+}
+
+function updateHouseholdPairingCode(householdId, pairingCode) {
+  db.prepare('UPDATE households SET pairing_code = ? WHERE id = ?').run(pairingCode, householdId)
+}
+
+function insertMirrorDevice(householdId, deviceToken) {
+  db.prepare('INSERT INTO mirror_devices (household_id, device_token, created_at) VALUES (?, ?, ?)').run(
+    householdId,
+    deviceToken,
+    Date.now()
+  )
+}
+
+function getMirrorDeviceByToken(deviceToken) {
+  return db.prepare('SELECT * FROM mirror_devices WHERE device_token = ?').get(deviceToken)
+}
+
+function insertFamilyMember(householdId, name, passwordHash) {
+  const { lastInsertRowid } = db
+    .prepare('INSERT INTO family_members (household_id, name, password_hash, created_at) VALUES (?, ?, ?, ?)')
+    .run(householdId, name, passwordHash, Date.now())
+  return lastInsertRowid
+}
+
+function getFamilyMember(householdId, name) {
+  return db.prepare('SELECT * FROM family_members WHERE household_id = ? AND name = ?').get(householdId, name)
+}
 
 // Incremental mean per field: new_avg = old_avg + (value - old_avg) / (n+1).
 // Nullable metric fields (a batch may have no gait observed, e.g. resident sat
@@ -103,6 +179,26 @@ function upsertDailyMetric(residentId, date, batch) {
   })
 }
 
+// Oldest -> newest, matching dashboard/src/wellness/syntheticTrend.js's
+// generator contract so the frontend adapter (realTrend.js) doesn't need to
+// re-sort. LIMIT is by day-count (what the frontend actually asks for —
+// "last N days"), not a date-range cutoff computed in JS, since that would
+// duplicate the "what counts as N days ago" logic in two places.
+function getDailyMetrics(residentId, days) {
+  return db
+    .prepare(
+      `SELECT date, gait_speed_avg, sit_to_stand_avg_ms, sway_score_avg,
+              symmetry_score_avg, freeze_events_count,
+              sitting_minutes, standing_minutes, lying_minutes, sample_count
+       FROM daily_metrics
+       WHERE resident_id = ?
+       ORDER BY date DESC
+       LIMIT ?`
+    )
+    .all(residentId, days)
+    .reverse()
+}
+
 function getUndismissedDriftCards(residentId) {
   return db
     .prepare(
@@ -115,4 +211,18 @@ function dismissDriftCard(id) {
   db.prepare('UPDATE drift_cards SET dismissed = 1 WHERE id = ?').run(id)
 }
 
-module.exports = { db, upsertDailyMetric, getUndismissedDriftCards, dismissDriftCard }
+module.exports = {
+  db,
+  upsertDailyMetric,
+  getDailyMetrics,
+  getUndismissedDriftCards,
+  dismissDriftCard,
+  insertHousehold,
+  getHouseholdByPairingCode,
+  getHouseholdById,
+  updateHouseholdPairingCode,
+  insertMirrorDevice,
+  getMirrorDeviceByToken,
+  insertFamilyMember,
+  getFamilyMember,
+}

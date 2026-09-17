@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Landing from './components/Landing.jsx'
+import AuthForm from './components/AuthForm.jsx'
 import GuardianTop from './components/GuardianTop.jsx'
 import WhosWatching from './components/WhosWatching.jsx'
 import Timeline from './components/Timeline.jsx'
@@ -7,9 +8,13 @@ import Composer from './components/Composer.jsx'
 import FallAlertModal from './components/FallAlertModal.jsx'
 import AlertToast from './components/AlertToast.jsx'
 import AmbientKolam from './components/AmbientKolam.jsx'
-import DriftCards from './components/DriftCards.jsx'
+import WellnessDriftCards from './components/WellnessDriftCards.jsx'
+import WellnessScreen from './components/WellnessScreen.jsx'
+import RegenerateCodeModal from './components/RegenerateCodeModal.jsx'
 import { useAlertFeed } from './hooks/useAlertFeed.js'
 import { useDriftCards } from './hooks/useDriftCards.js'
+import { adaptRealDriftCard } from './wellness/realDriftCards.js'
+import { getStoredToken, storeToken, clearStoredToken, regenerateCode } from './lib/auth.js'
 import { socket } from './lib/socket.js'
 
 function App() {
@@ -17,6 +22,83 @@ function App() {
   const [checkins, setCheckins] = useState([])
   const [fallOpen, setFallOpen] = useState(false)
   const [toastAlert, setToastAlert] = useState(null)
+  const [authToken, setAuthToken] = useState(() => getStoredToken())
+  const [codeModalOpen, setCodeModalOpen] = useState(false)
+  const [newPairingCode, setNewPairingCode] = useState(null)
+  const [codeError, setCodeError] = useState('')
+
+  // Connect (or reconnect) once we have a family JWT to authenticate with —
+  // the socket.io server rejects any unauthenticated connection
+  // (server/src/index.js's io.use() middleware).
+  useEffect(() => {
+    if (!authToken) return
+    socket.auth = { token: authToken }
+    socket.connect()
+    return () => socket.disconnect()
+  }, [authToken])
+
+  useEffect(() => {
+    function handleConnectError(err) {
+      console.error('Dashboard socket connect_error:', err.message)
+      // Most likely an expired/invalid token — drop it and send them back to
+      // the login form rather than sitting "disconnected" indefinitely.
+      clearStoredToken()
+      setAuthToken(null)
+    }
+    socket.on('connect_error', handleConnectError)
+    return () => socket.off('connect_error', handleConnectError)
+  }, [])
+
+  const handleAuthenticated = useCallback((token) => {
+    storeToken(token)
+    setAuthToken(token)
+  }, [])
+
+  const handleLogout = useCallback(() => {
+    clearStoredToken()
+    setAuthToken(null)
+    socket.disconnect()
+  }, [])
+
+  // Regenerates the household's pairing code (server/src/auth.js) — the
+  // one-time code shown on the mirror at setup can't be viewed again, so
+  // this is the only recovery path if it's lost before every family member
+  // has joined, or a replacement mirror needs pairing. Invalidates the old
+  // code immediately; doesn't affect already-paired mirrors or already
+  // logged-in members.
+  const handleRegenerateCode = useCallback(async () => {
+    setCodeModalOpen(true)
+    setNewPairingCode(null)
+    setCodeError('')
+    try {
+      const pairingCode = await regenerateCode(authToken)
+      setNewPairingCode(pairingCode)
+    } catch (err) {
+      setCodeError(err.message)
+    }
+  }, [authToken])
+
+  // Other family members' check-ins in this household, relayed by the server
+  // with a `from` name it attached itself (never trust a client-supplied
+  // name for attribution) — this app's own sent messages are added locally
+  // by handleSendCheckin below instead, since the server excludes the
+  // sender from its own broadcast.
+  useEffect(() => {
+    function handleCheckin(payload) {
+      setCheckins((prev) => [
+        {
+          kind: 'checkin',
+          id: `checkin-${payload.timestamp}-${payload.from ?? 'unknown'}`,
+          text: payload.text,
+          timestamp: payload.timestamp,
+          from: payload.from,
+        },
+        ...prev,
+      ])
+    }
+    socket.on('checkin', handleCheckin)
+    return () => socket.off('checkin', handleCheckin)
+  }, [])
 
   const handleNewAlert = useCallback((event) => setToastAlert(event), [])
   const { events, connected } = useAlertFeed({ onNewAlert: handleNewAlert })
@@ -45,7 +127,7 @@ function App() {
   const handleSendCheckin = useCallback((text) => {
     const timestamp = Date.now()
     setCheckins((prev) => [
-      { kind: 'checkin', id: `checkin-${timestamp}`, text, timestamp },
+      { kind: 'checkin', id: `checkin-${timestamp}`, text, timestamp, own: true },
       ...prev,
     ])
     socket.emit('checkin', { text, timestamp })
@@ -69,6 +151,20 @@ function App() {
     )
   }
 
+  if (!authToken) {
+    return <AuthForm onAuthenticated={handleAuthenticated} />
+  }
+
+  if (screen === 'wellness') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-peach to-cream relative overflow-hidden">
+        <div className="max-w-[1080px] mx-auto px-7 py-10 relative z-10">
+          <WellnessScreen onBack={() => setScreen('guardian')} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-peach to-cream relative overflow-hidden">
       <div className="absolute -top-28 -right-28 w-80 h-80 bg-rose/20 rounded-full blur-3xl pointer-events-none" />
@@ -87,8 +183,17 @@ function App() {
         <AmbientKolam className="absolute -top-24 left-1/2 -translate-x-1/2 w-screen h-[700px] max-w-none opacity-30 z-0 pointer-events-none" />
 
         <div className="relative z-10">
-          <GuardianTop connected={connected} />
-          <WhosWatching />
+          <GuardianTop connected={connected} onLogout={handleLogout} onRegenerateCode={handleRegenerateCode} />
+          <div className="flex items-center justify-between gap-4 flex-wrap mt-1">
+            <WhosWatching />
+            <button
+              type="button"
+              onClick={() => setScreen('wellness')}
+              className="text-xs font-semibold px-3.5 py-2 rounded-full bg-cream-2 text-rose-deep"
+            >
+              How she's doing, over time →
+            </button>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-7 mt-7">
             <div className="bg-white rounded-[22px] p-5 shadow-[0_10px_28px_rgba(92,30,46,0.12)]">
@@ -97,7 +202,10 @@ function App() {
             </div>
             <div className="flex flex-col gap-7">
               <Composer onSend={handleSendCheckin} onPreviewFall={() => setFallOpen(true)} />
-              <DriftCards cards={driftCards} onDismiss={dismissDriftCard} />
+              <WellnessDriftCards
+                cards={driftCards.map(adaptRealDriftCard)}
+                onDismiss={dismissDriftCard}
+              />
             </div>
           </div>
         </div>
@@ -105,6 +213,12 @@ function App() {
 
       <FallAlertModal open={fallOpen} onClose={() => setFallOpen(false)} />
       <AlertToast alert={toastAlert} onDismiss={() => setToastAlert(null)} />
+      <RegenerateCodeModal
+        open={codeModalOpen}
+        code={newPairingCode}
+        error={codeError}
+        onClose={() => setCodeModalOpen(false)}
+      />
     </div>
   )
 }

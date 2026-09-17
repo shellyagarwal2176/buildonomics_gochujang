@@ -148,6 +148,44 @@ Alert contract between frontend and backend: `{ sign: string, timestamp: number,
 
 ---
 
+## Authentication
+
+Two-tier auth so one household's alerts/check-ins never reach another
+household's mirror or dashboard. Implemented in `server/src/auth.js` and
+`server/src/db.js` (three new tables in the existing SQLite file — reused,
+not a second DB — see "no DB" caveats elsewhere in this doc, which now only
+hold for video, not for auth/wellness state).
+
+1. **Household pairing code** — a 6-character code (`households.pairing_code`,
+   alphabet excludes `0/O/1/I` for readability off a screen). The mirror
+   calls `POST /api/household` then `POST /api/mirror/pair` silently on
+   first launch (`mirror/src/lib/pairing.js`), gets back a `device_token`
+   (`mirror_devices`), and persists it in `localStorage` — she never sees a
+   login screen. The code itself is shown once on the mirror
+   (`PairingScreen.jsx`) purely so whoever sets up the household can hand it
+   to family members.
+2. **Named family member accounts** — each family member signs up or logs in
+   on the dashboard with the household's pairing code + their name +
+   password (`family_members`, bcrypt-hashed passwords). Success issues a
+   30-day JWT (`JWT_SECRET` env var, dev fallback if unset), stored in the
+   dashboard's `localStorage` and sent as `socket.auth.token`.
+
+Every socket connection must present either `{ deviceToken }` (mirror) or
+`{ token }` (family) in `socket.handshake.auth`; `server/src/index.js`'s
+`io.use()` middleware rejects anything else, and joins the accepted socket
+into a `household:${householdId}` room. `alert`/`checkin`/`fall`/
+`fallResolved` are emitted only to that room, not broadcast globally —
+`checkin` payloads get a server-attached `from` (the JWT's name), never a
+client-supplied one. `metric` isn't broadcast at all (write-only into
+`daily_metrics`), so it isn't room-scoped.
+
+Known gap: `daily_metrics`/`drift_cards` (and the `/drift-cards` REST
+endpoints) still key off a single hardcoded `residentId`, not
+`householdId`, and aren't behind auth — pre-existing from the Phase 2 trend
+engine, not something this auth pass fixes.
+
+---
+
 ## Team / component ownership (for context, not for Claude Code to manage)
 
 Phase 1 active builders: **Neerav** and **Shelly**. Kaavya and Pulkit are on frontend for now.
