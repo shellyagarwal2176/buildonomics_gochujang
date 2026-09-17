@@ -179,6 +179,26 @@ function upsertDailyMetric(residentId, date, batch) {
   })
 }
 
+// Oldest -> newest, matching dashboard/src/wellness/syntheticTrend.js's
+// generator contract so the frontend adapter (realTrend.js) doesn't need to
+// re-sort. LIMIT is by day-count (what the frontend actually asks for —
+// "last N days"), not a date-range cutoff computed in JS, since that would
+// duplicate the "what counts as N days ago" logic in two places.
+function getDailyMetrics(residentId, days) {
+  return db
+    .prepare(
+      `SELECT date, gait_speed_avg, sit_to_stand_avg_ms, sway_score_avg,
+              symmetry_score_avg, freeze_events_count,
+              sitting_minutes, standing_minutes, lying_minutes, sample_count
+       FROM daily_metrics
+       WHERE resident_id = ?
+       ORDER BY date DESC
+       LIMIT ?`
+    )
+    .all(residentId, days)
+    .reverse()
+}
+
 function getUndismissedDriftCards(residentId) {
   return db
     .prepare(
@@ -194,6 +214,7 @@ function dismissDriftCard(id) {
 module.exports = {
   db,
   upsertDailyMetric,
+  getDailyMetrics,
   getUndismissedDriftCards,
   dismissDriftCard,
   insertHousehold,

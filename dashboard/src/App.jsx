@@ -8,11 +8,13 @@ import Composer from './components/Composer.jsx'
 import FallAlertModal from './components/FallAlertModal.jsx'
 import AlertToast from './components/AlertToast.jsx'
 import AmbientKolam from './components/AmbientKolam.jsx'
-import DriftCards from './components/DriftCards.jsx'
+import WellnessDriftCards from './components/WellnessDriftCards.jsx'
 import WellnessScreen from './components/WellnessScreen.jsx'
+import RegenerateCodeModal from './components/RegenerateCodeModal.jsx'
 import { useAlertFeed } from './hooks/useAlertFeed.js'
 import { useDriftCards } from './hooks/useDriftCards.js'
-import { getStoredToken, storeToken, clearStoredToken } from './lib/auth.js'
+import { adaptRealDriftCard } from './wellness/realDriftCards.js'
+import { getStoredToken, storeToken, clearStoredToken, regenerateCode } from './lib/auth.js'
 import { socket } from './lib/socket.js'
 
 function App() {
@@ -21,6 +23,9 @@ function App() {
   const [fallOpen, setFallOpen] = useState(false)
   const [toastAlert, setToastAlert] = useState(null)
   const [authToken, setAuthToken] = useState(() => getStoredToken())
+  const [codeModalOpen, setCodeModalOpen] = useState(false)
+  const [newPairingCode, setNewPairingCode] = useState(null)
+  const [codeError, setCodeError] = useState('')
 
   // Connect (or reconnect) once we have a family JWT to authenticate with —
   // the socket.io server rejects any unauthenticated connection
@@ -54,6 +59,24 @@ function App() {
     setAuthToken(null)
     socket.disconnect()
   }, [])
+
+  // Regenerates the household's pairing code (server/src/auth.js) — the
+  // one-time code shown on the mirror at setup can't be viewed again, so
+  // this is the only recovery path if it's lost before every family member
+  // has joined, or a replacement mirror needs pairing. Invalidates the old
+  // code immediately; doesn't affect already-paired mirrors or already
+  // logged-in members.
+  const handleRegenerateCode = useCallback(async () => {
+    setCodeModalOpen(true)
+    setNewPairingCode(null)
+    setCodeError('')
+    try {
+      const pairingCode = await regenerateCode(authToken)
+      setNewPairingCode(pairingCode)
+    } catch (err) {
+      setCodeError(err.message)
+    }
+  }, [authToken])
 
   // Other family members' check-ins in this household, relayed by the server
   // with a `from` name it attached itself (never trust a client-supplied
@@ -160,7 +183,7 @@ function App() {
         <AmbientKolam className="absolute -top-24 left-1/2 -translate-x-1/2 w-screen h-[700px] max-w-none opacity-30 z-0 pointer-events-none" />
 
         <div className="relative z-10">
-          <GuardianTop connected={connected} onLogout={handleLogout} />
+          <GuardianTop connected={connected} onLogout={handleLogout} onRegenerateCode={handleRegenerateCode} />
           <div className="flex items-center justify-between gap-4 flex-wrap mt-1">
             <WhosWatching />
             <button
@@ -179,7 +202,10 @@ function App() {
             </div>
             <div className="flex flex-col gap-7">
               <Composer onSend={handleSendCheckin} onPreviewFall={() => setFallOpen(true)} />
-              <DriftCards cards={driftCards} onDismiss={dismissDriftCard} />
+              <WellnessDriftCards
+                cards={driftCards.map(adaptRealDriftCard)}
+                onDismiss={dismissDriftCard}
+              />
             </div>
           </div>
         </div>
@@ -187,6 +213,12 @@ function App() {
 
       <FallAlertModal open={fallOpen} onClose={() => setFallOpen(false)} />
       <AlertToast alert={toastAlert} onDismiss={() => setToastAlert(null)} />
+      <RegenerateCodeModal
+        open={codeModalOpen}
+        code={newPairingCode}
+        error={codeError}
+        onClose={() => setCodeModalOpen(false)}
+      />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-export default function GuardianTop({ connected, onLogout }) {
+export default function GuardianTop({ connected, onLogout, onRegenerateCode }) {
   return (
     <div className="flex justify-between items-start gap-4 flex-wrap">
       <div>
@@ -18,6 +18,15 @@ export default function GuardianTop({ connected, onLogout }) {
         >
           {connected ? 'Connected to the relay' : "Can't reach the relay — check server/ is running"}
         </div>
+        {onRegenerateCode && (
+          <button
+            type="button"
+            onClick={onRegenerateCode}
+            className="text-xs font-semibold text-rose-deep underline px-1"
+          >
+            New pairing code
+          </button>
+        )}
         {onLogout && (
           <button
             type="button"

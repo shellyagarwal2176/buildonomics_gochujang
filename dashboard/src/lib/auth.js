@@ -36,3 +36,18 @@ export async function login({ pairingCode, name, password }) {
   const { token } = await postJson('/api/family/login', { pairingCode, name, password })
   return token
 }
+
+// Issues a fresh household pairing code (server/src/auth.js's
+// regenerateHouseholdCode) — the one shown once on the mirror at setup can't
+// be viewed again otherwise, so this is the only way to get a new one for
+// a family member who never saw or lost it. Doesn't affect already-paired
+// mirrors or already-logged-in members, only future signups/pairings.
+export async function regenerateCode(token) {
+  const res = await fetch(`${SERVER_URL}/api/household/regenerate-code`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || 'Could not generate a new code')
+  return data.pairingCode
+}

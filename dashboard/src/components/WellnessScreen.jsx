@@ -2,23 +2,29 @@ import { useMemo, useState } from 'react'
 import HealthGraph from './HealthGraph.jsx'
 import WellnessDriftCards from './WellnessDriftCards.jsx'
 import Predictions from './Predictions.jsx'
-import { generateSyntheticTrend } from '../wellness/syntheticTrend.js'
+import { useWellnessTrend } from '../hooks/useWellnessTrend.js'
+import { useDriftCards } from '../hooks/useDriftCards.js'
 import { getDriftCards } from '../wellness/driftAnalysis.js'
+import { adaptRealDriftCard } from '../wellness/realDriftCards.js'
 
 const TABS = [
   { key: 'graph', label: 'Health graph' },
   { key: 'predictions', label: 'Predictions' },
 ]
 
-// Container for the Phase 2 wellness UI. Everything here reads SYNTHETIC
-// data (see wellness/syntheticTrend.js) — there is no real pose/gait
-// pipeline behind this yet, per the PRD's UI-first scope for this pass.
+// Container for the Phase 2 wellness UI. Reads SYNTHETIC data until at least
+// a week of real data has come in through the mirror's webcam pipeline (see
+// useWellnessTrend.js), then switches over automatically — no manual toggle.
 export default function WellnessScreen({ onBack }) {
   const [tab, setTab] = useState('graph')
   const [mentionedIds, setMentionedIds] = useState(() => new Set())
 
-  const data = useMemo(() => generateSyntheticTrend(), [])
-  const driftCards = useMemo(() => getDriftCards(data), [data])
+  const { data, isSynthetic } = useWellnessTrend()
+  const { cards: realCards } = useDriftCards()
+  const driftCards = useMemo(
+    () => (isSynthetic ? getDriftCards(data) : realCards.map(adaptRealDriftCard)),
+    [isSynthetic, data, realCards]
+  )
 
   const handleMention = (card) => {
     setMentionedIds((prev) => new Set(prev).add(card.id))
@@ -42,10 +48,12 @@ export default function WellnessScreen({ onBack }) {
         </button>
       </div>
 
-      <p className="text-xs text-muted italic mb-5">
-        Preview data — this screen shows synthetic sample trends, not live readings from her
-        mirror yet.
-      </p>
+      {isSynthetic && (
+        <p className="text-xs text-muted italic mb-5">
+          Preview data — this screen shows synthetic sample trends, not live readings from her
+          mirror yet.
+        </p>
+      )}
 
       <div className="flex gap-1.5 mb-5">
         {TABS.map((t) => (
@@ -65,10 +73,12 @@ export default function WellnessScreen({ onBack }) {
       {tab === 'graph' ? (
         <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-7">
           <HealthGraph data={data} />
-          <div className="bg-white rounded-[22px] p-5 shadow-[0_10px_28px_rgba(92,30,46,0.12)]">
-            <h2 className="font-serif text-lg text-wine mb-3.5">Drift cards</h2>
-            <WellnessDriftCards cards={driftCards} mentionedIds={mentionedIds} onMentionToDoctor={handleMention} />
-          </div>
+          <WellnessDriftCards
+            title="Drift cards"
+            cards={driftCards}
+            mentionedIds={mentionedIds}
+            onMentionToDoctor={handleMention}
+          />
         </div>
       ) : (
         <Predictions data={data} />

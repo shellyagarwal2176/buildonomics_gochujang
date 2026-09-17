@@ -1,6 +1,6 @@
 const { createServer } = require('http')
 const { Server } = require('socket.io')
-const { upsertDailyMetric, getUndismissedDriftCards, dismissDriftCard } = require('./db')
+const { upsertDailyMetric, getDailyMetrics, getUndismissedDriftCards, dismissDriftCard } = require('./db')
 const {
   createHousehold,
   regenerateHouseholdCode,
@@ -158,6 +158,20 @@ const httpServer = createServer(async (req, res) => {
       return
     }
     sendJson(res, 200, getUndismissedDriftCards(residentId))
+    return
+  }
+
+  // Historical daily_metrics for the dashboard's Health Graph/Predictions —
+  // unauthenticated to match /drift-cards above, a known pre-existing gap
+  // (see CLAUDE.md's Authentication section), not introduced or fixed here.
+  if (req.method === 'GET' && url.pathname === '/metrics') {
+    const residentId = url.searchParams.get('residentId')
+    if (!residentId) {
+      sendJson(res, 400, { error: 'residentId is required' })
+      return
+    }
+    const days = Math.min(Number(url.searchParams.get('days')) || 60, 365)
+    sendJson(res, 200, getDailyMetrics(residentId, days))
     return
   }
 
