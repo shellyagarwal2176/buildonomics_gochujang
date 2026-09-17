@@ -128,10 +128,10 @@ function App() {
     )
   }
 
-<<<<<<< HEAD
   if (!authToken) {
     return <AuthForm onAuthenticated={handleAuthenticated} />
-=======
+  }
+
   if (screen === 'wellness') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-peach to-cream relative overflow-hidden">
@@ -140,7 +140,6 @@ function App() {
         </div>
       </div>
     )
->>>>>>> 65c53ac57574c8cedf98b24cc5320594a3ad5cdf
   }
 
   return (
@@ -161,11 +160,7 @@ function App() {
         <AmbientKolam className="absolute -top-24 left-1/2 -translate-x-1/2 w-screen h-[700px] max-w-none opacity-30 z-0 pointer-events-none" />
 
         <div className="relative z-10">
-<<<<<<< HEAD
           <GuardianTop connected={connected} onLogout={handleLogout} />
-          <WhosWatching />
-=======
-          <GuardianTop connected={connected} />
           <div className="flex items-center justify-between gap-4 flex-wrap mt-1">
             <WhosWatching />
             <button
@@ -176,7 +171,6 @@ function App() {
               How she's doing, over time →
             </button>
           </div>
->>>>>>> 65c53ac57574c8cedf98b24cc5320594a3ad5cdf
 
           <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-7 mt-7">
             <div className="bg-white rounded-[22px] p-5 shadow-[0_10px_28px_rgba(92,30,46,0.12)]">
