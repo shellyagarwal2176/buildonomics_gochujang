@@ -21,8 +21,11 @@ export default function FallAlertModal({ open, onClose }) {
           <button className="bg-white text-urgent rounded-2xl py-3.5 text-sm font-bold">
             Call them now
           </button>
-          <button className="bg-white/12 border border-white/40 text-white rounded-2xl py-3.5 text-sm font-bold">
-            Call neighbour Lakshmi
+          <button
+            onClick={onClose}
+            className="bg-white/12 border border-white/40 text-white rounded-2xl py-3.5 text-sm font-bold"
+          >
+            Calling neighbour
           </button>
           <button onClick={onClose} className="text-white/75 underline text-sm py-1">
             I've seen this

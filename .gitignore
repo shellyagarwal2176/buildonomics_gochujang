@@ -4,3 +4,4 @@ dist/
 *.log
 /buildonomics_gochujang/
 .playwright-mcp/
+*.db

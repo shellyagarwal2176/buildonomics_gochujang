@@ -3,6 +3,9 @@ import { loadSignClassifier } from '../ml/signClassifier.js'
 import { landmarksToVector } from '../ml/normalize.js'
 import { SignChainBuffer } from '../alerts/signChain.js'
 import { dispatchAlert } from '../alerts/dispatchAlert.js'
+import { createFallDetector, createWellnessBatcher, classifyPosture } from '../wellness/poseMetrics.js'
+import { dispatchFall } from '../wellness/dispatchFall.js'
+import { dispatchMetric } from '../wellness/dispatchMetric.js'
 import { socket } from '../lib/socket.js'
 
 // Real recognition loop: webcam -> Holistic (live, per CLAUDE.md an independent
@@ -16,21 +19,27 @@ const CONFIRM_WINDOW_FRAMES = 15 // ~1s at ~15fps
 const CONFIRM_THRESHOLD = 0.6 // fraction of the window that must agree
 const UI_UPDATE_MS = 200 // ~5Hz
 const NO_HAND_TIMEOUT_MS = 2000
+const METRIC_BATCH_MS = 45000 // wellness metrics flush every ~45s, not per-frame
 
-export function useSignRecognition({ onIntentConfirmed, onWordConfirmed } = {}) {
+export function useSignRecognition({ onIntentConfirmed, onWordConfirmed, onFallDetected, wellnessEnabled = false } = {}) {
   const videoRef = useRef(null)
   const [inFrame, setInFrame] = useState(false)
   const [confidence, setConfidence] = useState(0)
   const [holdingSign, setHoldingSign] = useState(null)
   const [draftWords, setDraftWords] = useState([])
+  const [poseDebug, setPoseDebug] = useState(null)
   const chainRef = useRef(null)
 
   const callbackRef = useRef(onIntentConfirmed)
   const wordCallbackRef = useRef(onWordConfirmed)
+  const fallCallbackRef = useRef(onFallDetected)
+  const wellnessEnabledRef = useRef(wellnessEnabled)
   useEffect(() => {
     callbackRef.current = onIntentConfirmed
     wordCallbackRef.current = onWordConfirmed
-  }, [onIntentConfirmed, onWordConfirmed])
+    fallCallbackRef.current = onFallDetected
+    wellnessEnabledRef.current = wellnessEnabled
+  }, [onIntentConfirmed, onWordConfirmed, onFallDetected, wellnessEnabled])
 
   useEffect(() => {
     let cancelled = false
@@ -50,6 +59,18 @@ export function useSignRecognition({ onIntentConfirmed, onWordConfirmed } = {}) 
       },
     })
     chainRef.current = chain
+
+    const fallDetector = createFallDetector({
+      onFall: ({ confidence }) => {
+        dispatchFall(socket, { timestamp: Date.now(), confidence })
+        fallCallbackRef.current?.()
+      },
+    })
+    const wellnessBatcher = createWellnessBatcher()
+    const metricInterval = setInterval(() => {
+      if (!wellnessEnabledRef.current) return
+      dispatchMetric(socket, wellnessBatcher.flush())
+    }, METRIC_BATCH_MS)
 
     async function setup() {
       classifierRef.current = await loadSignClassifier()
@@ -87,6 +108,12 @@ export function useSignRecognition({ onIntentConfirmed, onWordConfirmed } = {}) 
     function onResults(results) {
       if (cancelled) return
       const now = Date.now()
+
+      if (wellnessEnabledRef.current) {
+        fallDetector.update(results.poseLandmarks, now)
+        wellnessBatcher.update(results.poseLandmarks, now)
+      }
+
       const hasHand = Boolean(results.leftHandLandmarks || results.rightHandLandmarks)
 
       if (hasHand) lastHandSeenAt = now
@@ -131,6 +158,19 @@ export function useSignRecognition({ onIntentConfirmed, onWordConfirmed } = {}) 
         setInFrame(currentlyInFrame)
         setConfidence(currentlyInFrame ? topConfidence : 0)
         setHoldingSign(currentlyInFrame ? topLabel : null)
+
+        // Debug-overlay snapshot only (see components/DebugOverlay.jsx, ?debug=1)
+        // — same ~5Hz throttle as the rest of the UI state above, not per-frame.
+        const pose = results.poseLandmarks
+        const lh = pose?.[23], rh = pose?.[24]
+        setPoseDebug({
+          wellnessEnabled: wellnessEnabledRef.current,
+          hasHand,
+          hasPose: Boolean(pose),
+          hipY: lh && rh ? ((lh.y + rh.y) / 2).toFixed(3) : null,
+          visibility: lh && rh ? (((lh.visibility ?? 0) + (rh.visibility ?? 0)) / 2).toFixed(4) : null,
+          posture: pose ? classifyPosture(pose) : null,
+        })
       }
     }
 
@@ -138,6 +178,7 @@ export function useSignRecognition({ onIntentConfirmed, onWordConfirmed } = {}) 
 
     return () => {
       cancelled = true
+      clearInterval(metricInterval)
       chain.dispose()
       chainRef.current = null
       camera?.stop()
@@ -148,5 +189,5 @@ export function useSignRecognition({ onIntentConfirmed, onWordConfirmed } = {}) 
   const sendSentence = () => chainRef.current?.flush()
   const removeLastWord = () => chainRef.current?.removeLast()
 
-  return { videoRef, inFrame, confidence, holdingSign, draftWords, sendSentence, removeLastWord }
+  return { videoRef, inFrame, confidence, holdingSign, draftWords, poseDebug, sendSentence, removeLastWord }
 }

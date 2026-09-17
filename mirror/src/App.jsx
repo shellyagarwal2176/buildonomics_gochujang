@@ -10,15 +10,27 @@ import ConsentModal from './components/ConsentModal.jsx'
 import WordConfirmedFlash from './components/WordConfirmedFlash.jsx'
 import MessageSentToast from './components/MessageSentToast.jsx'
 import AmbientKolam from './components/AmbientKolam.jsx'
+import DebugOverlay from './components/DebugOverlay.jsx'
+import FallDetectedBanner from './components/FallDetectedBanner.jsx'
 import { useSignRecognition } from './hooks/useSignRecognition.js'
+import { getConsent, setConsent } from './wellness/consent.js'
+import { dispatchFallResolved } from './wellness/dispatchFallResolved.js'
 import { socket } from './lib/socket.js'
 
 function App() {
   const [lastEvent, setLastEvent] = useState(null)
-  const [consentOpen, setConsentOpen] = useState(false)
+  const [wellnessConsent, setWellnessConsent] = useState(() => getConsent())
+  const [consentOpen, setConsentOpen] = useState(() => getConsent() === null)
   const [confirmedWord, setConfirmedWord] = useState(null)
   const [lastCheckin, setLastCheckin] = useState(null)
   const [sentEvent, setSentEvent] = useState(null)
+  const [fallDetected, setFallDetected] = useState(false)
+
+  const handleConsent = useCallback((granted) => {
+    setConsent(granted)
+    setWellnessConsent(granted)
+    setConsentOpen(false)
+  }, [])
 
   // Family's check-in messages, sent from the dashboard's Composer over the
   // 'checkin' socket event (see server/src/index.js's relay).
@@ -43,12 +55,20 @@ function App() {
     setConfirmedWord(word.sign)
   }, [])
 
+  const handleFallDetected = useCallback(() => {
+    setFallDetected(true)
+  }, [])
+
   const {
-    videoRef, inFrame, confidence, holdingSign, draftWords, sendSentence, removeLastWord,
+    videoRef, inFrame, confidence, holdingSign, draftWords, poseDebug, sendSentence, removeLastWord,
   } = useSignRecognition({
     onIntentConfirmed: handleIntentConfirmed,
     onWordConfirmed: handleWordConfirmed,
+    onFallDetected: handleFallDetected,
+    wellnessEnabled: Boolean(wellnessConsent),
   })
+
+  const debugMode = new URLSearchParams(window.location.search).get('debug') === '1'
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-peach to-cream pb-32 relative overflow-hidden">
@@ -86,12 +106,20 @@ function App() {
 
       <ConsentModal
         open={consentOpen}
-        onYes={() => setConsentOpen(false)}
-        onNo={() => setConsentOpen(false)}
+        onYes={() => handleConsent(true)}
+        onNo={() => handleConsent(false)}
       />
 
       <WordConfirmedFlash word={confirmedWord} onDone={() => setConfirmedWord(null)} />
       <MessageSentToast event={sentEvent} onDone={() => setSentEvent(null)} />
+      {debugMode && <DebugOverlay data={poseDebug} />}
+      <FallDetectedBanner
+        open={fallDetected}
+        onClose={() => {
+          dispatchFallResolved(socket)
+          setFallDetected(false)
+        }}
+      />
     </div>
   )
 }

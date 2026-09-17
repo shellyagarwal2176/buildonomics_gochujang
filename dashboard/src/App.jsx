@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Landing from './components/Landing.jsx'
 import GuardianTop from './components/GuardianTop.jsx'
 import WhosWatching from './components/WhosWatching.jsx'
@@ -7,7 +7,9 @@ import Composer from './components/Composer.jsx'
 import FallAlertModal from './components/FallAlertModal.jsx'
 import AlertToast from './components/AlertToast.jsx'
 import AmbientKolam from './components/AmbientKolam.jsx'
+import DriftCards from './components/DriftCards.jsx'
 import { useAlertFeed } from './hooks/useAlertFeed.js'
+import { useDriftCards } from './hooks/useDriftCards.js'
 import { socket } from './lib/socket.js'
 
 function App() {
@@ -18,6 +20,27 @@ function App() {
 
   const handleNewAlert = useCallback((event) => setToastAlert(event), [])
   const { events, connected } = useAlertFeed({ onNewAlert: handleNewAlert })
+  const { cards: driftCards, dismiss: dismissDriftCard } = useDriftCards()
+
+  // Phase 2: a real 'fall' event opens the same modal Composer's manual
+  // "Preview: fall alert" button opens — that button stays for demo/testing
+  // when there's no live fall to trigger the flow. A 'fallResolved' event
+  // (the elder hitting "I'm okay" on their own FallDetectedBanner) closes it
+  // back down in step, instead of it staying open until a family member acts.
+  useEffect(() => {
+    function handleFall() {
+      setFallOpen(true)
+    }
+    function handleFallResolved() {
+      setFallOpen(false)
+    }
+    socket.on('fall', handleFall)
+    socket.on('fallResolved', handleFallResolved)
+    return () => {
+      socket.off('fall', handleFall)
+      socket.off('fallResolved', handleFallResolved)
+    }
+  }, [])
 
   const handleSendCheckin = useCallback((text) => {
     const timestamp = Date.now()
@@ -72,7 +95,10 @@ function App() {
               <h2 className="font-serif text-lg text-wine mb-3.5">Today</h2>
               <Timeline items={timelineItems} />
             </div>
-            <Composer onSend={handleSendCheckin} onPreviewFall={() => setFallOpen(true)} />
+            <div className="flex flex-col gap-7">
+              <Composer onSend={handleSendCheckin} onPreviewFall={() => setFallOpen(true)} />
+              <DriftCards cards={driftCards} onDismiss={dismissDriftCard} />
+            </div>
           </div>
         </div>
       </div>
