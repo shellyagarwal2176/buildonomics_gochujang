@@ -121,7 +121,11 @@ function App() {
 
           <SignHint />
 
-          <ChainNote lastEvent={lastEvent} onOpenConsent={() => setConsentOpen(true)} />
+          <ChainNote
+            lastEvent={lastEvent}
+            onOpenConsent={() => setConsentOpen(true)}
+            wellnessOn={Boolean(wellnessConsent)}
+          />
         </div>
       </div>
 
