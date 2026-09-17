@@ -7,6 +7,7 @@ import Composer from './components/Composer.jsx'
 import FallAlertModal from './components/FallAlertModal.jsx'
 import AlertToast from './components/AlertToast.jsx'
 import AmbientKolam from './components/AmbientKolam.jsx'
+import WellnessScreen from './components/WellnessScreen.jsx'
 import { useAlertFeed } from './hooks/useAlertFeed.js'
 import { socket } from './lib/socket.js'
 
@@ -46,6 +47,16 @@ function App() {
     )
   }
 
+  if (screen === 'wellness') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-peach to-cream relative overflow-hidden">
+        <div className="max-w-[1080px] mx-auto px-7 py-10 relative z-10">
+          <WellnessScreen onBack={() => setScreen('guardian')} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-peach to-cream relative overflow-hidden">
       <div className="absolute -top-28 -right-28 w-80 h-80 bg-rose/20 rounded-full blur-3xl pointer-events-none" />
@@ -65,7 +76,16 @@ function App() {
 
         <div className="relative z-10">
           <GuardianTop connected={connected} />
-          <WhosWatching />
+          <div className="flex items-center justify-between gap-4 flex-wrap mt-1">
+            <WhosWatching />
+            <button
+              type="button"
+              onClick={() => setScreen('wellness')}
+              className="text-xs font-semibold px-3.5 py-2 rounded-full bg-cream-2 text-rose-deep"
+            >
+              How she's doing, over time →
+            </button>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-7 mt-7">
             <div className="bg-white rounded-[22px] p-5 shadow-[0_10px_28px_rgba(92,30,46,0.12)]">
