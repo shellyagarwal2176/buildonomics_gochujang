@@ -20,6 +20,7 @@ const CONFIRM_THRESHOLD = 0.6 // fraction of the window that must agree
 const UI_UPDATE_MS = 200 // ~5Hz
 const NO_HAND_TIMEOUT_MS = 2000
 const METRIC_BATCH_MS = 45000 // wellness metrics flush every ~45s, not per-frame
+const NEW_SIGN_STREAK_FRAMES = 3 // ~0.2s at ~15fps — see onResults' transition check
 
 export function useSignRecognition({ onIntentConfirmed, onWordConfirmed, onFallDetected, wellnessEnabled = false } = {}) {
   const videoRef = useRef(null)
@@ -50,6 +51,8 @@ export function useSignRecognition({ onIntentConfirmed, onWordConfirmed, onFallD
     let confirmedThisHold = false
 
     const recentPredictions = [] // ring buffer of { label, confidence }, refs-only
+    let lastConfirmedLabel = null
+    let differentLabelStreak = 0
     const classifierRef = { current: null }
     const chain = new SignChainBuffer({
       onUpdate: setDraftWords,
@@ -128,11 +131,38 @@ export function useSignRecognition({ onIntentConfirmed, onWordConfirmed, onFallD
         topLabel = prediction.label
         topConfidence = prediction.confidence
 
+        // Chained signs are usually signed back-to-back with the hand never
+        // fully leaving the frame, so gating solely on hand-loss (the old
+        // behavior) stalled confirmation of the second+ word until she
+        // deliberately lowered her hand between every sign. Instead, once the
+        // classifier reads a different handshape for a short streak (debounced
+        // against single-frame noise right at the confirm boundary), start
+        // accumulating a fresh window for the new sign right away.
+        if (confirmedThisHold) {
+          if (topLabel !== lastConfirmedLabel) {
+            differentLabelStreak++
+            if (differentLabelStreak >= NEW_SIGN_STREAK_FRAMES) {
+              // The streak frames that just proved "this is a new sign" already
+              // belong to its confirm window — keep them instead of discarding,
+              // so proving the transition costs nothing extra on top of the
+              // normal hold-to-confirm window.
+              confirmedThisHold = false
+              differentLabelStreak = 0
+              for (let i = recentPredictions.length - 1; i >= 0; i--) {
+                if (recentPredictions[i].label !== topLabel) recentPredictions.splice(i, 1)
+              }
+            }
+          } else {
+            differentLabelStreak = 0
+          }
+        }
+
         recentPredictions.push(prediction)
         if (recentPredictions.length > CONFIRM_WINDOW_FRAMES) recentPredictions.shift()
       } else {
         recentPredictions.length = 0
         confirmedThisHold = false
+        differentLabelStreak = 0
       }
 
       // Majority vote: does one label hold a strong enough share of the recent window?
@@ -148,6 +178,7 @@ export function useSignRecognition({ onIntentConfirmed, onWordConfirmed, onFallD
               .reduce((sum, p) => sum + p.confidence, 0) / majorityCount
 
           confirmedThisHold = true
+          lastConfirmedLabel = majorityLabel
           wordCallbackRef.current?.({ sign: majorityLabel, confidence: avgConfidence })
           chain.push({ sign: majorityLabel, confidence: avgConfidence, timestamp: now })
         }

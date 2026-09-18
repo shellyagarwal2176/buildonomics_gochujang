@@ -227,17 +227,31 @@ const httpServer = createServer(async (req, res) => {
   }
 
   // Rotates the household's pairing code (see auth.js's regenerateHouseholdCode)
-  // — any logged-in family member can trigger it, proven by their JWT.
-  // Doesn't invalidate already-paired mirrors or already-issued JWTs, only
-  // future signups/logins/mirror pairings need the new code.
+  // — either a logged-in family member (proven by their JWT, dashboard side)
+  // or the paired mirror itself (proven by its device token, amma's side) can
+  // trigger it: both already prove household membership, so neither is more
+  // trusted than the other for this. Doesn't invalidate already-paired
+  // mirrors or already-issued JWTs, only future signups/logins/mirror
+  // pairings need the new code.
   if (req.method === 'POST' && url.pathname === '/api/household/regenerate-code') {
-    const payload = authenticateFamilyRequest(req)
-    if (!payload) {
+    const familyPayload = authenticateFamilyRequest(req)
+    let householdId = familyPayload?.householdId
+
+    if (!householdId) {
+      try {
+        const body = await readJsonBody(req)
+        householdId = verifyDeviceToken(body.deviceToken)?.householdId
+      } catch {
+        // malformed body — falls through to the unauthorized check below
+      }
+    }
+
+    if (!householdId) {
       sendJson(res, 401, { error: 'unauthorized' })
       return
     }
     try {
-      const pairingCode = regenerateHouseholdCode(payload.householdId)
+      const pairingCode = regenerateHouseholdCode(householdId)
       sendJson(res, 200, { pairingCode })
     } catch (err) {
       sendJson(res, 400, { error: err.message })

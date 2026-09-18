@@ -16,7 +16,8 @@ import PairingScreen from './components/PairingScreen.jsx'
 import { useSignRecognition } from './hooks/useSignRecognition.js'
 import { getConsent, setConsent } from './wellness/consent.js'
 import { dispatchFallResolved } from './wellness/dispatchFallResolved.js'
-import { ensurePaired } from './lib/pairing.js'
+import { dispatchFall } from './wellness/dispatchFall.js'
+import { ensurePaired, regenerateCode } from './lib/pairing.js'
 import { socket } from './lib/socket.js'
 
 function App() {
@@ -28,6 +29,9 @@ function App() {
   const [sentEvent, setSentEvent] = useState(null)
   const [fallDetected, setFallDetected] = useState(false)
   const [pairingCode, setPairingCode] = useState(null)
+  const [pairingCodeLoading, setPairingCodeLoading] = useState(false)
+  const [pairingCodeError, setPairingCodeError] = useState('')
+  const [pairingRegenerated, setPairingRegenerated] = useState(false)
 
   // Silent device pairing/auth (CLAUDE.md's Authentication section) — runs
   // once per device, ever. The socket only connects once this resolves.
@@ -55,6 +59,32 @@ function App() {
     setConsentOpen(false)
   }, [])
 
+  // "Get a new code for family" (ChainNote) — the login issue this fixes:
+  // the pairing code is otherwise shown once, right after first launch, with
+  // no way back to it. Rotates the household's code (lib/pairing.js's
+  // regenerateCode, proven by this device's own token) and reuses
+  // PairingScreen to display it, same as the original first-launch flow.
+  const handleShowFamilyCode = useCallback(async () => {
+    setPairingRegenerated(true)
+    setPairingCodeError('')
+    setPairingCodeLoading(true)
+    setPairingCode(null)
+    try {
+      const code = await regenerateCode()
+      setPairingCode(code)
+    } catch (err) {
+      setPairingCodeError(err.message)
+    } finally {
+      setPairingCodeLoading(false)
+    }
+  }, [])
+
+  const handleClosePairingScreen = useCallback(() => {
+    setPairingCode(null)
+    setPairingCodeError('')
+    setPairingRegenerated(false)
+  }, [])
+
   // Family's check-in messages, sent from the dashboard's Composer over the
   // 'checkin' socket event (see server/src/index.js's relay).
   useEffect(() => {
@@ -79,6 +109,15 @@ function App() {
   }, [])
 
   const handleFallDetected = useCallback(() => {
+    setFallDetected(true)
+  }, [])
+
+  // ?debug=1 only (DebugOverlay) — mirrors exactly what the real detector's
+  // onFall callback does (poseMetrics.js's createFallDetector): dispatch the
+  // real socket event AND flip the local banner, so a demo doesn't depend on
+  // reliably mimed pose geometry to prove the fall pipeline works end to end.
+  const handleTriggerTestFall = useCallback(() => {
+    dispatchFall(socket, { timestamp: Date.now(), confidence: 1 })
     setFallDetected(true)
   }, [])
 
@@ -111,7 +150,25 @@ function App() {
         <AmbientKolam className="absolute -top-16 left-1/2 -translate-x-1/2 w-screen h-[600px] max-w-none opacity-40 z-0 pointer-events-none" />
 
         <div className="relative z-10">
-          <Greeting />
+          <div className="flex items-start justify-between gap-4">
+            <Greeting />
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleShowFamilyCode}
+                className="text-xs font-semibold px-3.5 py-2 rounded-full bg-cream-2 text-rose-deep"
+              >
+                New pairing code
+              </button>
+              <button
+                type="button"
+                onClick={() => setConsentOpen(true)}
+                className="text-xs font-semibold px-3.5 py-2 rounded-full bg-cream-2 text-wine"
+              >
+                Change movement watching
+              </button>
+            </div>
+          </div>
 
           <div className="bg-white rounded-[28px] shadow-[0_10px_28px_rgba(92,30,46,0.12)] p-5 flex flex-col gap-4 mt-5">
             <CameraFeed videoRef={videoRef} status={inFrame ? 'good' : 'out'} />
@@ -121,11 +178,7 @@ function App() {
 
           <SignHint />
 
-          <ChainNote
-            lastEvent={lastEvent}
-            onOpenConsent={() => setConsentOpen(true)}
-            wellnessOn={Boolean(wellnessConsent)}
-          />
+          <ChainNote lastEvent={lastEvent} wellnessOn={Boolean(wellnessConsent)} />
         </div>
       </div>
 
@@ -139,7 +192,7 @@ function App() {
 
       <WordConfirmedFlash word={confirmedWord} onDone={() => setConfirmedWord(null)} />
       <MessageSentToast event={sentEvent} onDone={() => setSentEvent(null)} />
-      {debugMode && <DebugOverlay data={poseDebug} />}
+      {debugMode && <DebugOverlay data={poseDebug} onTriggerFall={handleTriggerTestFall} />}
       <FallDetectedBanner
         open={fallDetected}
         onClose={() => {
@@ -147,7 +200,13 @@ function App() {
           setFallDetected(false)
         }}
       />
-      <PairingScreen code={pairingCode} onContinue={() => setPairingCode(null)} />
+      <PairingScreen
+        code={pairingCode}
+        loading={pairingCodeLoading}
+        error={pairingCodeError}
+        regenerated={pairingRegenerated}
+        onContinue={handleClosePairingScreen}
+      />
     </div>
   )
 }

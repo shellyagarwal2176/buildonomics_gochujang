@@ -2,7 +2,14 @@
 // real camera — gated behind ?debug=1 so it never shows in the real elder-
 // facing UI. Not per-frame: reads the same ~5Hz throttled snapshot the rest
 // of useSignRecognition's UI state uses.
-export default function DebugOverlay({ data }) {
+//
+// The real fall detector (wellness/poseMetrics.js) needs a fast, large hip
+// drop, no recovery for 1.5s, and a favorable posture read — geometry that's
+// awkward to reliably re-enact on demand for a demo. onTriggerFall fires the
+// exact same dispatchFall(...) + local banner the real detector would, so
+// this button exercises the actual mirror -> socket -> server -> dashboard
+// path deterministically, instead of hoping a mimed fall gets picked up.
+export default function DebugOverlay({ data, onTriggerFall }) {
   const row = (label, value) => (
     <div className="flex justify-between gap-4">
       <span className="text-muted">{label}</span>
@@ -23,6 +30,15 @@ export default function DebugOverlay({ data }) {
           {row('hip visibility', data.visibility)}
           {row('posture', data.posture)}
         </>
+      )}
+      {onTriggerFall && (
+        <button
+          type="button"
+          onClick={onTriggerFall}
+          className="pointer-events-auto mt-2 bg-urgent text-white rounded-md py-1.5 text-xs font-bold"
+        >
+          Trigger test fall
+        </button>
       )}
     </div>
   )

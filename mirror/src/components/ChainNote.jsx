@@ -1,4 +1,4 @@
-export default function ChainNote({ lastEvent, onOpenConsent, wellnessOn }) {
+export default function ChainNote({ lastEvent, wellnessOn }) {
   return (
     <div className="flex items-center gap-3.5 flex-wrap mt-5">
       {lastEvent ? (
@@ -14,13 +14,6 @@ export default function ChainNote({ lastEvent, onOpenConsent, wellnessOn }) {
           {wellnessOn ? 'On' : 'Off'}
         </span>
       </p>
-      <button
-        type="button"
-        onClick={onOpenConsent}
-        className="text-rose-deep text-[13px] font-semibold underline underline-offset-4 decoration-1"
-      >
-        See the first-time setup screen
-      </button>
     </div>
   )
 }

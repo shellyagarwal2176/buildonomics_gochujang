@@ -40,3 +40,17 @@ export async function ensurePaired() {
   socket.connect()
   return { pairingCode }
 }
+
+// Issues a fresh household pairing code from this mirror, for when the
+// one-time code shown at first launch is long gone and she needs to hand a
+// new one to a family member (server/src/auth.js's regenerateHouseholdCode,
+// same endpoint the dashboard's "New pairing code" button hits — proven here
+// by this device's own token instead of a family JWT, see server/src/
+// index.js's /api/household/regenerate-code). Invalidates the old code
+// immediately; doesn't affect this or any other already-paired mirror.
+export async function regenerateCode() {
+  const deviceToken = localStorage.getItem(DEVICE_TOKEN_KEY)
+  if (!deviceToken) throw new Error('This mirror is not paired yet')
+  const { pairingCode } = await postJson('/api/household/regenerate-code', { deviceToken })
+  return pairingCode
+}
